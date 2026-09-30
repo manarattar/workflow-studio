@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { compileWorkflow, getDatasets, runWorkflow } from './api'
 import { HUMAN_REVIEW, KIND, pathOf } from './theme'
+import Glyph from './components/Glyph'
 import InboxPanel from './components/InboxPanel'
 import ProcessPanel from './components/ProcessPanel'
 import Scoreboard from './components/Scoreboard'
@@ -10,50 +11,22 @@ import WorkflowCanvas from './components/WorkflowCanvas'
 // same defaults as the backend (models.DEFAULT_MIN_CONFIDENCE)
 const DEFAULT_THRESHOLD = { choice: 0.35, yes_no: 0.4 }
 
+const thresholdsOf = (wf) =>
+  Object.fromEntries(
+    wf.nodes.filter((n) => n.type === 'decide').map((n) => [n.id, n.min_confidence ?? DEFAULT_THRESHOLD[n.kind]]),
+  )
+
 function Legend() {
   return (
-    <div className="hidden items-center gap-3 lg:flex">
+    <ul className="hidden items-center gap-4 xl:flex">
       {['code', 'jev', 'llm', 'human'].map((kind) => (
-        <span key={kind} className="flex items-center gap-1.5 text-[11px] text-slate-400">
-          <span className={`h-2 w-2 rounded-full ${KIND[kind].dot}`} />
-          <span className="text-slate-200">{KIND[kind].label}</span>
+        <li key={kind} className="flex items-center gap-1.5 text-[12px] text-ink-2">
+          <Glyph kind={kind} className={KIND[kind].text} />
+          <span className="font-medium text-ink">{KIND[kind].label}</span>
           <span>{KIND[kind].sub}</span>
-        </span>
+        </li>
       ))}
-    </div>
-  )
-}
-
-function EmptyCanvas({ building }) {
-  return (
-    <div className="flex h-full items-center justify-center p-8">
-      <div className="max-w-md text-center">
-        <div className="mx-auto mb-5 flex w-fit items-center gap-2">
-          {['code', 'jev', 'llm'].map((kind, i) => (
-            <div key={kind} className="flex items-center gap-2">
-              <div
-                className={`rounded-lg border ${KIND[kind].border} bg-slate-900 px-3 py-2 text-xs ${KIND[kind].text} ${
-                  building ? 'animate-pulse' : ''
-                }`}
-                style={{ animationDelay: `${i * 200}ms` }}
-              >
-                {KIND[kind].label}
-              </div>
-              {i < 2 && <span className="text-slate-600">→</span>}
-            </div>
-          ))}
-        </div>
-        <h2 className="text-lg font-semibold text-slate-100">
-          {building ? 'Turning your words into a workflow…' : 'Your workflow appears here'}
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-400">
-          Each step goes to the tool that fits it: <span className="text-slate-200">code</span> for numbers and
-          rules, <span className="text-violet-300">Jev</span> for judgment calls with a confidence score, and an{' '}
-          <span className="text-cyan-300">LLM</span> only where something needs to be written. When Jev isn't sure,
-          a person decides.
-        </p>
-      </div>
-    </div>
+    </ul>
   )
 }
 
@@ -75,14 +48,31 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedStep, setSelectedStep] = useState(null)
 
+  const resetRun = () => {
+    setResults({})
+    setSummary(null)
+    setSelectedItem(null)
+  }
+
+  // open an inbox on its saved reference workflow, so there is something to run straight away
+  const openDataset = useCallback((dataset) => {
+    const wf = dataset.reference_workflow
+    setWorkflow(wf)
+    setThresholds(wf ? thresholdsOf(wf) : {})
+    setLog(wf ? [{ stage: 'loaded' }] : [])
+    setBuildId((id) => id + 1)
+  }, [])
+
   useEffect(() => {
     getDatasets()
       .then((list) => {
         setDatasets(list)
         setDescriptions(Object.fromEntries(list.map((d) => [d.id, d.template])))
+        const first = list.find((d) => d.id === 'accounts_payable') || list[0]
+        if (first) openDataset(first)
       })
-      .catch((e) => setError(e.message))
-  }, [])
+      .catch((e) => setError(`Couldn't load the sample inboxes: ${e.message}`))
+  }, [openDataset])
 
   const dataset = datasets.find((d) => d.id === datasetId)
   const description = descriptions[datasetId] || ''
@@ -97,7 +87,7 @@ export default function App() {
     }
   }, [workflow, thresholds])
 
-  // how many inbox items went through each step and edge, for the canvas
+  // how many inbox items went through each step and edge
   const { nodeCounts, edgeCounts } = useMemo(() => {
     const nodeCounts = {}
     const edgeCounts = {}
@@ -112,19 +102,12 @@ export default function App() {
     return { nodeCounts, edgeCounts }
   }, [results])
 
-  const resetRun = () => {
-    setResults({})
-    setSummary(null)
-    setSelectedItem(null)
-  }
-
   const switchDataset = (id) => {
     if (id === datasetId || building || running) return
     setDatasetId(id)
-    setWorkflow(null)
-    setLog([])
     setSelectedStep(null)
     resetRun()
+    openDataset(datasets.find((d) => d.id === id))
   }
 
   const build = async () => {
@@ -136,25 +119,15 @@ export default function App() {
     resetRun()
     try {
       await compileWorkflow(datasetId, description, (event) => {
-        setLog((prev) => {
-          const settled = prev.map((e) => ({ ...e, pending: false }))
-          return [...settled, { ...event, pending: event.stage === 'drafting' }]
-        })
+        setLog((prev) => [...prev.map((e) => ({ ...e, pending: false })), { ...event, pending: event.stage === 'drafting' }])
         if (event.stage === 'done') {
-          const wf = event.result.workflow
-          setWorkflow(wf)
+          setWorkflow(event.result.workflow)
+          setThresholds(thresholdsOf(event.result.workflow))
           setBuildId((id) => id + 1)
-          setThresholds(
-            Object.fromEntries(
-              wf.nodes
-                .filter((n) => n.type === 'decide')
-                .map((n) => [n.id, n.min_confidence ?? DEFAULT_THRESHOLD[n.kind]]),
-            ),
-          )
         }
       })
     } catch (e) {
-      setError(e.message)
+      setError(`The build didn't finish: ${e.message}`)
     } finally {
       setBuilding(false)
     }
@@ -170,7 +143,7 @@ export default function App() {
         else setSummary(event)
       })
     } catch (e) {
-      setError(e.message)
+      setError(`The run stopped: ${e.message}`)
     } finally {
       setRunning(false)
     }
@@ -187,7 +160,7 @@ export default function App() {
         }
       })
     } catch (e) {
-      setError(e.message)
+      setError(`Your test didn't run: ${e.message}`)
     } finally {
       setRunning(false)
     }
@@ -197,40 +170,38 @@ export default function App() {
   const inspected = selectedStep && nodeMap[selectedStep]?.type === 'decide' ? nodeMap[selectedStep] : null
 
   return (
-    <div className="flex h-screen flex-col bg-slate-950 text-slate-100">
-      <header className="flex items-center justify-between gap-6 border-b border-slate-800 px-5 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-cyan-400 text-sm font-bold text-slate-950">
-            W
-          </div>
-          <div>
-            <h1 className="text-sm font-semibold">Workflow Studio</h1>
-            <p className="text-[11px] text-slate-400">Plain words in, a working AI workflow out</p>
-          </div>
+    <div className="flex h-full flex-col bg-paper text-ink">
+      <header className="flex items-center gap-8 border-b border-rule bg-sheet px-5">
+        <div className="py-3">
+          <h1 className="font-cond text-[19px] font-semibold leading-none tracking-[-0.01em]">Routing Slip</h1>
+          <p className="mt-1 text-[12px] text-ink-2">A process in plain words, run on a real inbox</p>
         </div>
 
-        <div className="flex rounded-lg border border-slate-800 bg-slate-900 p-0.5">
+        <nav aria-label="Sample inboxes" className="flex self-stretch">
           {datasets.map((d) => (
             <button
               key={d.id}
               onClick={() => switchDataset(d.id)}
               title={d.blurb}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                d.id === datasetId ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+              aria-current={d.id === datasetId ? 'page' : undefined}
+              className={`border-b-2 px-3 text-[13.5px] transition-colors ${
+                d.id === datasetId ? 'border-ink font-medium text-ink' : 'border-transparent text-ink-2 hover:text-ink'
               }`}
             >
-              {d.name}
+              {d.name.replace(' inbox', '')}
             </button>
           ))}
-        </div>
+        </nav>
 
-        <Legend />
+        <div className="ml-auto">
+          <Legend />
+        </div>
       </header>
 
       {error && (
-        <div className="border-b border-rose-900 bg-rose-950/60 px-5 py-2 text-xs text-rose-200">
+        <div role="alert" className="flex items-center justify-between border-b border-rule bg-human-soft px-5 py-2 text-[13px] text-ink">
           {error}
-          <button className="ml-3 text-rose-400 hover:underline" onClick={() => setError(null)}>dismiss</button>
+          <button className="text-[12px] text-ink-2 hover:text-ink" onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
 
@@ -245,43 +216,48 @@ export default function App() {
             log={log}
           />
 
-          <main className="relative min-w-0 flex-1">
-            {runnable ? (
-              <WorkflowCanvas
-                key={`${datasetId}-${buildId}`}
-                workflow={runnable}
-                path={pathOf(selectedResult)}
-                nodeCounts={nodeCounts}
-                edgeCounts={edgeCounts}
-                thresholds={thresholds}
-                onSelectStep={(id) => setSelectedStep(id === HUMAN_REVIEW ? null : id)}
-              />
-            ) : (
-              <EmptyCanvas building={building} />
-            )}
-
-            <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center px-4">
-              <Scoreboard summary={summary} />
-            </div>
-
-            {runnable && !inspected && !summary && (
-              <p className="pointer-events-none absolute bottom-4 left-4 text-[11px] text-slate-500">
-                Tip: click a Jev step to see its question and set how sure it must be.
-              </p>
-            )}
-
-            {inspected && (
-              <div className="pointer-events-none absolute bottom-4 left-4">
-                <StepInspector
-                  node={inspected}
-                  threshold={thresholds[inspected.id]}
-                  onThreshold={(v) => setThresholds((prev) => ({ ...prev, [inspected.id]: v }))}
-                  onClose={() => setSelectedStep(null)}
-                  onRerun={runInbox}
-                  canRerun={!running}
+          <main className="flex min-w-0 flex-1 flex-col">
+            <Scoreboard summary={summary} total={dataset.items.length} />
+            <div className="relative min-h-0 flex-1">
+              {runnable ? (
+                <WorkflowCanvas
+                  key={`${datasetId}-${buildId}`}
+                  workflow={runnable}
+                  path={pathOf(selectedResult)}
+                  nodeCounts={nodeCounts}
+                  edgeCounts={edgeCounts}
+                  thresholds={thresholds}
+                  onSelectStep={(id) => setSelectedStep(id === HUMAN_REVIEW ? null : id)}
                 />
-              </div>
-            )}
+              ) : (
+                <div className="flex h-full items-center justify-center px-8">
+                  <p className="max-w-sm text-center text-[14px] leading-relaxed text-ink-2">
+                    {building
+                      ? 'The LLM is drafting your workflow. Each draft is checked before it appears here.'
+                      : 'Build a workflow to see it here.'}
+                  </p>
+                </div>
+              )}
+
+              {runnable && !inspected && (
+                <p className="pointer-events-none absolute bottom-3 left-14 text-[12px] text-ink-3">
+                  Click a Jev step to see its question and set how sure it must be.
+                </p>
+              )}
+
+              {inspected && (
+                <div className="pointer-events-none absolute bottom-4 left-4">
+                  <StepInspector
+                    node={inspected}
+                    threshold={thresholds[inspected.id]}
+                    onThreshold={(v) => setThresholds((prev) => ({ ...prev, [inspected.id]: v }))}
+                    onClose={() => setSelectedStep(null)}
+                    onRerun={runInbox}
+                    canRerun={!running}
+                  />
+                </div>
+              )}
+            </div>
           </main>
 
           <InboxPanel
@@ -298,7 +274,7 @@ export default function App() {
           />
         </div>
       ) : (
-        !error && <p className="p-8 text-sm text-slate-500">Loading…</p>
+        !error && <p className="p-8 text-[14px] text-ink-2">Loading the sample inboxes…</p>
       )}
     </div>
   )

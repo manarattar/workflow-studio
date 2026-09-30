@@ -1,58 +1,60 @@
+import Glyph from './Glyph'
 import { humanize } from '../theme'
 
-/** Details of one Jev step, with the one knob that matters: how sure it must be before acting. */
+/** One Jev step: its question, its options, and how sure it must be before acting. */
 export default function StepInspector({ node, threshold, onThreshold, onClose, onRerun, canRerun }) {
   return (
-    <div className="pointer-events-auto w-[340px] rounded-xl border border-violet-500/40 bg-slate-950/95 p-4 shadow-2xl backdrop-blur">
-      <div className="flex items-start justify-between gap-2">
+    <div className="pointer-events-auto w-[340px] rounded-[3px] border border-rule bg-sheet p-4 shadow-[0_8px_24px_rgba(20,30,40,0.12)]">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="rounded-md bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-200">
-            Jev decision
-          </span>
-          <h3 className="mt-1.5 text-sm font-semibold text-slate-100">{node.label}</h3>
+          <p className="flex items-center gap-1.5 font-cond text-[11px] font-semibold uppercase tracking-[0.07em] text-jev">
+            <Glyph kind="jev" /> Jev decision
+          </p>
+          <h3 className="mt-1 text-[15px] font-medium text-ink">{node.label}</h3>
         </div>
-        <button onClick={onClose} className="text-slate-500 hover:text-slate-200">✕</button>
+        <button onClick={onClose} className="text-[12px] text-ink-3 hover:text-ink">Close</button>
       </div>
 
-      <p className="mt-2 text-xs italic text-slate-300">“{node.question}”</p>
-      <ul className="mt-3 space-y-1.5">
+      <p className="mt-2 text-[13px] text-ink-2">{node.question}</p>
+      <dl className="mt-3 space-y-2">
         {Object.entries(node.options).map(([option, meaning]) => (
-          <li key={option} className="text-[11px] leading-snug">
-            <span className="font-semibold text-violet-200">{humanize(option)}</span>
-            <span className="text-slate-400"> — {meaning}</span>
-          </li>
+          <div key={option} className="text-[12.5px] leading-snug">
+            <dt className="font-medium text-ink">{humanize(option)}</dt>
+            <dd className="text-ink-2">{meaning}</dd>
+          </div>
         ))}
-      </ul>
+      </dl>
 
-      <div className="mt-4 rounded-lg border border-slate-800 p-3">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-300">How sure must Jev be to act?</span>
-          <span className="font-mono text-violet-200">{Math.round(threshold * 100)}%</span>
+      <div className="mt-4 border-t border-rule pt-3">
+        <div className="flex items-baseline justify-between">
+          <label htmlFor="threshold" className="text-[13px] text-ink">How sure must Jev be to act?</label>
+          <span className="num text-[14px] text-jev">{Math.round(threshold * 100)}%</span>
         </div>
         <input
+          id="threshold"
           type="range"
           min={0}
           max={0.9}
           step={0.05}
           value={threshold}
           onChange={(e) => onThreshold(Number(e.target.value))}
-          className="mt-2 w-full accent-violet-500"
+          className="mt-2 w-full accent-[var(--jev)]"
         />
-        <div className="flex justify-between text-[10px] text-slate-500">
+        <div className="flex justify-between text-[11.5px] text-ink-3">
           <span>automate more</span>
           <span>ask a person more</span>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-          Below this, the item goes to human review instead of following Jev's answer. It's the
-          trade-off between automation and risk — the business decides it, not the model.
+        <p className="mt-2 text-[12px] leading-snug text-ink-3">
+          Below this, the item goes to a person instead of following Jev's answer. It trades automation
+          against risk, and the business sets it.
         </p>
       </div>
       {canRerun && (
         <button
           onClick={onRerun}
-          className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500"
+          className="mt-3 w-full rounded-[3px] bg-ink px-3 py-2 text-[13px] font-medium text-paper hover:opacity-90"
         >
-          Re-run the inbox with this setting
+          Run the inbox again
         </button>
       )}
     </div>

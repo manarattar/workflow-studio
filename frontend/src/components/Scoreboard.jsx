@@ -1,29 +1,25 @@
 import { pct, seconds, usd } from '../theme'
 
-function Stat({ label, value, hint, tone = 'text-slate-100' }) {
+function Cell({ label, value, note, tone = 'text-ink' }) {
   return (
-    <div className="px-4 py-2">
-      <p className={`font-mono text-xl font-semibold ${tone}`}>{value}</p>
-      <p className="text-[11px] text-slate-400">{label}</p>
-      {hint && <p className="text-[10px] text-slate-600">{hint}</p>}
+    <div className="min-w-0 px-4 py-2.5">
+      <p className="text-[12px] text-ink-2">{label}</p>
+      <p className={`num text-[20px] font-medium leading-tight ${tone}`}>{value}</p>
+      <p className="truncate text-[11.5px] text-ink-3">{note}</p>
     </div>
   )
 }
 
-export default function Scoreboard({ summary }) {
-  if (!summary) return null
+/** The run's result as a ledger line: always visible, filled in once the inbox has run. */
+export default function Scoreboard({ summary, total }) {
+  const s = summary
   return (
-    <div className="pointer-events-auto flex divide-x divide-slate-800 rounded-xl border border-slate-800 bg-slate-950/90 shadow-2xl backdrop-blur">
-      <Stat label="handled automatically" value={pct(summary.automation_rate)} tone="text-emerald-300" />
-      <Stat label="sent to a person" value={summary.human_review} hint="Jev wasn't sure enough" tone="text-amber-300" />
-      <Stat
-        label="correct when automated"
-        value={pct(summary.accuracy_automated)}
-        hint="vs. reference policy"
-        tone="text-sky-300"
-      />
-      <Stat label="total cost" value={usd(summary.cost_usd)} hint={`${summary.jev_calls} Jev · ${summary.llm_calls} LLM calls`} />
-      <Stat label="for the whole inbox" value={seconds(summary.wall_ms)} hint={`${summary.items} items in parallel`} />
+    <div className="grid grid-cols-5 divide-x divide-rule border-b border-rule bg-sheet">
+      <Cell label="Handled automatically" value={s ? pct(s.automation_rate) : '–'} note={s ? `${s.automated} of ${s.items}` : `run the ${total} items`} tone="text-done" />
+      <Cell label="Sent to a person" value={s ? s.human_review : '–'} note="Jev wasn't sure enough" tone="text-human" />
+      <Cell label="Correct when automated" value={s ? pct(s.accuracy_automated) : '–'} note="vs. reference policy" />
+      <Cell label="Cost" value={s ? usd(s.cost_usd) : '–'} note={s ? `${s.jev_calls} Jev, ${s.llm_calls} LLM calls` : 'Jev and LLM calls'} />
+      <Cell label="Time" value={s ? seconds(s.wall_ms) : '–'} note="items run in parallel" />
     </div>
   )
 }

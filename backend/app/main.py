@@ -78,7 +78,10 @@ def datasets():
     return [
         {
             k: d[k]
-            for k in ("id", "name", "blurb", "fields", "outcomes", "template", "knowledge", "items")
+            for k in (
+                "id", "name", "blurb", "fields", "outcomes", "template", "knowledge",
+                "reference_workflow", "items",
+            )
         }
         for d in DATASETS.values()
     ]

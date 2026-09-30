@@ -1,1 +1,147 @@
 @import "tailwindcss";
+
+/*
+ * Routing Slip - back-office paper: a drafting-paper page, white sheets, ink text.
+ * Each kind of step has its own muted ink, the way a process map uses a legend.
+ */
+:root {
+  color-scheme: light;
+  --paper: #f4f5f2;
+  --sheet: #ffffff;
+  --ink: #1b232c;
+  --ink-2: #4a5561;
+  --ink-3: #7b858f;
+  --rule: #dadcd5;
+  --grid: #d3d6ce;
+
+  --code: #3f4852;
+  --code-soft: #eceef0;
+  --jev: #0f6b6b;
+  --jev-soft: #e1f0ee;
+  --llm: #2f4aa0;
+  --llm-soft: #e8ecf7;
+  --done: #2e6b3a;
+  --done-soft: #e6f0e6;
+  --human: #a8620a;
+  --human-soft: #fbf0de;
+  --bad: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --paper: #121619;
+    --sheet: #1a1f24;
+    --ink: #e7eaed;
+    --ink-2: #aab2ba;
+    --ink-3: #7d868f;
+    --rule: #2b323a;
+    --grid: #262c32;
+
+    --code: #b3bbc4;
+    --code-soft: #232a31;
+    --jev: #5cc4bc;
+    --jev-soft: #16302e;
+    --llm: #93a8f0;
+    --llm-soft: #1d2542;
+    --done: #74c38f;
+    --done-soft: #183021;
+    --human: #e8a53f;
+    --human-soft: #33270f;
+    --bad: #f0806f;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-code: var(--code);
+  --color-code-soft: var(--code-soft);
+  --color-jev: var(--jev);
+  --color-jev-soft: var(--jev-soft);
+  --color-llm: var(--llm);
+  --color-llm-soft: var(--llm-soft);
+  --color-done: var(--done);
+  --color-done-soft: var(--done-soft);
+  --color-human: var(--human);
+  --color-human-soft: var(--human-soft);
+  --color-bad: var(--bad);
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-cond: "IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--llm);
+  outline-offset: 2px;
+}
+
+/* React Flow, restyled to the paper palette */
+.react-flow {
+  --xy-background-color: var(--paper);
+  --xy-edge-label-color: var(--ink-2);
+}
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  fill: var(--ink-2);
+}
+.react-flow__controls-button:hover {
+  background: var(--paper);
+}
+.react-flow__attribution {
+  background: transparent;
+}
+.react-flow__attribution a {
+  color: var(--ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .react-flow__edge-path {
+    stroke-dasharray: none;
+  }
+}

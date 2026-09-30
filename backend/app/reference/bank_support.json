@@ -1,0 +1,107 @@
+{
+  "name": "Customer Message Routing",
+  "start": "check_fraud",
+  "nodes": [
+    {
+      "type": "decide",
+      "id": "check_fraud",
+      "label": "Check for Fraud",
+      "kind": "yes_no",
+      "question": "Is this message about fraud, scams, or a lost or stolen card?",
+      "options": {
+        "yes": "The message reports fraud, a scam, or a lost or stolen card, such as 'I think I was scammed', 'My card was stolen', or 'I received a phishing email.'",
+        "no": "The message does not mention fraud, scams, or a lost or stolen card, such as 'I want to change my address', 'What are your opening hours?', or 'I need help with my account.'"
+      },
+      "routes": {
+        "yes": "outcome_fraud_team_urgent",
+        "no": "check_vulnerability"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "decide",
+      "id": "check_vulnerability",
+      "label": "Check for Vulnerability",
+      "kind": "yes_no",
+      "question": "Does the customer seem vulnerable?",
+      "options": {
+        "yes": "The customer appears vulnerable, such as expressing confusion, grief, or financial distress, with messages like 'I'm so lost and don't know what to do', 'I just lost my spouse and need help', or 'I'm struggling to pay my bills.'",
+        "no": "The customer does not appear vulnerable, such as asking for standard information or assistance, with messages like 'Can you help me with my online banking?', 'I need to update my contact information.', or 'What are the fees for your services?'."
+      },
+      "routes": {
+        "yes": "outcome_vulnerable_callback",
+        "no": "check_complaint"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "decide",
+      "id": "check_complaint",
+      "label": "Check for Complaint",
+      "kind": "yes_no",
+      "question": "Is this message a complaint about the bank's service or a decision?",
+      "options": {
+        "yes": "The message expresses dissatisfaction with the bank's service or a decision, such as 'I am unhappy with my loan application outcome', 'Your service was terrible', or 'I want to file a complaint about my account.'",
+        "no": "The message does not express dissatisfaction, such as asking for information or assistance, with messages like 'How do I reset my password?', 'What are your business hours?', or 'Can I get a statement for my account?'."
+      },
+      "routes": {
+        "yes": "outcome_complaints_team",
+        "no": "check_simple_question"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "decide",
+      "id": "check_simple_question",
+      "label": "Check for Simple Question",
+      "kind": "yes_no",
+      "question": "Is this a simple question that can be answered with general information?",
+      "options": {
+        "yes": "The message is a simple question that can be answered with general information, such as 'What are your opening hours?', 'How do I apply for a credit card?', or 'What is the interest rate on savings accounts?'.",
+        "no": "The message is not a simple question, such as requiring detailed assistance or context, with messages like 'I need help with my loan application', 'Can you explain my recent charges?', or 'I want to dispute a transaction.'"
+      },
+      "routes": {
+        "yes": "write_auto_reply",
+        "no": "outcome_general_queue"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "write",
+      "id": "write_auto_reply",
+      "label": "Draft Auto Reply",
+      "instructions": "Draft a reply to the customer answering their simple question with general information.",
+      "next": "outcome_auto_reply"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_fraud_team_urgent",
+      "label": "Fraud Team Urgent",
+      "outcome": "fraud_team_urgent"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_vulnerable_callback",
+      "label": "Vulnerable Callback",
+      "outcome": "vulnerable_callback"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_complaints_team",
+      "label": "Complaints Team",
+      "outcome": "complaints_team"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_auto_reply",
+      "label": "Auto Reply",
+      "outcome": "auto_reply"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_general_queue",
+      "label": "General Queue",
+      "outcome": "general_queue"
+    }
+  ]
+}

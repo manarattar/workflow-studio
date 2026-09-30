@@ -105,6 +105,42 @@ def _intent_problems(description: str, workflow: Workflow, dataset: dict) -> lis
     return problems
 
 
+def _add_missing_outcomes(data: dict, outcomes: list[str]) -> None:
+    """
+    The LLM often routes to an outcome step it never defines ("block_fraud",
+    "outcome_pay_automatically"). When a missing id clearly names an allowed
+    outcome, code adds that step instead of spending another LLM round on it.
+    """
+    nodes = data.get("nodes")
+    if not isinstance(nodes, list):
+        return
+    known = {n.get("id") for n in nodes if isinstance(n, dict)}
+    targets = []
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        targets += [n.get("if_true"), n.get("if_false"), n.get("next")]
+        targets += (
+            list((n.get("routes") or {}).values())
+            if isinstance(n.get("routes"), dict)
+            else []
+        )
+    for target in targets:
+        if not isinstance(target, str) or target in known:
+            continue
+        name = target.removeprefix("outcome_")
+        if name in outcomes or name == HUMAN_REVIEW:
+            nodes.append(
+                {
+                    "type": "outcome",
+                    "id": target,
+                    "label": name.replace("_", " ").capitalize(),
+                    "outcome": name,
+                }
+            )
+            known.add(target)
+
+
 class CompileError(Exception):
     def __init__(self, problems: list[str]):
         super().__init__("; ".join(problems))
@@ -163,7 +199,9 @@ def compile_steps(description: str, dataset: dict):
         for key in usage:
             usage[key] += reply[key]
         try:
-            workflow = Workflow.model_validate(json.loads(reply["text"]))
+            data = json.loads(reply["text"])
+            _add_missing_outcomes(data, list(dataset["outcomes"]))
+            workflow = Workflow.model_validate(data)
             problems = validate_workflow(
                 workflow, dataset["fields"], list(dataset["outcomes"])
             ) or _intent_problems(description, workflow, dataset)

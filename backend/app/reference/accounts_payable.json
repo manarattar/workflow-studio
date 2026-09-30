@@ -1,0 +1,73 @@
+{
+  "name": "Invoice Processing Workflow",
+  "start": "check_fraud",
+  "nodes": [
+    {
+      "type": "decide",
+      "id": "check_fraud",
+      "label": "Check for Fraud",
+      "kind": "yes_no",
+      "question": "Does the email look like fraud?",
+      "options": {
+        "yes": "The email shows signs of fraud, such as requests to change bank details or urgent payment demands.",
+        "no": "The email appears to be a genuine invoice without any suspicious elements."
+      },
+      "routes": {
+        "yes": "block_fraud",
+        "no": "check_po_number"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "condition",
+      "id": "check_po_number",
+      "label": "Check for PO Number",
+      "field": "po_number",
+      "operator": "is_empty",
+      "value": null,
+      "if_true": "request_missing_info",
+      "if_false": "check_amount"
+    },
+    {
+      "type": "condition",
+      "id": "check_amount",
+      "label": "Check Invoice Amount",
+      "field": "amount_eur",
+      "operator": ">",
+      "value": 1000.0,
+      "if_true": "manager_approval",
+      "if_false": "pay_automatically"
+    },
+    {
+      "type": "write",
+      "id": "request_missing_info",
+      "label": "Request Missing PO Number",
+      "instructions": "Draft a polite email to the supplier requesting the missing purchase order number.",
+      "next": "outcome_request_missing_info"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_request_missing_info",
+      "label": "Request Missing Info Outcome",
+      "outcome": "request_missing_info"
+    },
+    {
+      "type": "outcome",
+      "id": "block_fraud",
+      "label": "Block Fraud Outcome",
+      "outcome": "block_fraud"
+    },
+    {
+      "type": "outcome",
+      "id": "pay_automatically",
+      "label": "Pay Automatically Outcome",
+      "outcome": "pay_automatically"
+    },
+    {
+      "type": "outcome",
+      "id": "manager_approval",
+      "label": "Manager Approval Outcome",
+      "outcome": "manager_approval"
+    }
+  ]
+}

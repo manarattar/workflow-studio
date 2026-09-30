@@ -333,3 +333,19 @@ PRIVATE_KEYS = {"id", "expected"}
 
 def item_state(item: dict, fields: dict) -> dict:
     return {k: item.get(k) for k in fields if k not in PRIVATE_KEYS}
+
+
+def _load_reference_workflows() -> None:
+    """Saved workflows for each reference policy, so the studio opens on a working example."""
+    import json
+    from pathlib import Path
+
+    folder = Path(__file__).parent / "reference"
+    for dataset_id, dataset in DATASETS.items():
+        path = folder / f"{dataset_id}.json"
+        dataset["reference_workflow"] = (
+            json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        )
+
+
+_load_reference_workflows()

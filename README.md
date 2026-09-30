@@ -1,7 +1,8 @@
-# Workflow Studio
+# Routing Slip
 
-**Describe a business process in plain words — watch it become a working AI workflow, run it on a
-real inbox, and see how much it automates, how accurate it is, and what it costs.**
+A routing slip is the form clipped to a document to send it through an office. This one is
+written in plain words: describe a business process, and it becomes a working workflow that runs on
+a real inbox and reports how much it automated, how accurate it was, and what it cost.
 
 Live demo: **[studio.manarattar.com](https://studio.manarattar.com)**
 
@@ -55,7 +56,9 @@ A process is compiled into four kinds of steps, and the compiler decides which t
 | Accounts payable (16 invoices) | 100% | 100% | ~$0.0005 | ~5 s |
 | Bank customer support (16 messages, 2 Dutch) | 88–100% | 93–100% | ~$0.001 | ~12 s |
 
-Compiling a workflow takes ~10–15 s and ~$0.001, usually with 1–2 self-repair rounds.
+Compiling a workflow takes ~10–15 s and ~$0.001, usually with 1–2 self-repair rounds. The app
+opens each inbox on a saved reference workflow (`backend/app/reference/`), so a visitor can run it
+straight away.
 
 ## Run it locally
 
@@ -77,7 +80,7 @@ npm run dev                                    # http://localhost:5173, proxies 
 ## Stack
 
 FastAPI · Server-Sent Events · pydantic · OpenAI (gpt-4o-mini) · Jev via REST · React 18 · Vite ·
-Tailwind CSS 4 · React Flow + dagre · Docker · Caddy
+Tailwind CSS 4 · React Flow + dagre · IBM Plex · Docker · Caddy
 
 ## Project layout
 

@@ -1,103 +1,111 @@
 import { useState } from 'react'
+import Glyph from './Glyph'
 import { HUMAN_REVIEW, KIND, humanize, seconds } from '../theme'
 
-function OutcomeChip({ outcome }) {
+/** The outcome, marked on the item the way an office stamps a routing slip. */
+function Stamp({ outcome }) {
   const human = outcome === HUMAN_REVIEW
   return (
-    <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${human ? KIND.human.chip : KIND.outcome.chip}`}>
-      {human ? 'human review' : humanize(outcome)}
+    <span
+      className={`inline-block -rotate-[1.5deg] rounded-[2px] border px-1.5 py-[1px] font-cond text-[10.5px] font-semibold uppercase tracking-[0.08em] ${
+        human ? 'border-human text-human' : 'border-done text-done'
+      }`}
+    >
+      {human ? 'to a person' : humanize(outcome)}
     </span>
   )
 }
 
-function ItemRow({ item, result, running, selected, onSelect }) {
-  const title = item.subject || item.message
-  const from = item.sender || item.channel
-  return (
-    <button
-      onClick={() => result && onSelect(item.id)}
-      className={`w-full rounded-lg border px-3 py-2 text-left transition ${
-        selected ? 'border-sky-500 bg-sky-500/10' : 'border-slate-800 bg-slate-900 hover:border-slate-700'
-      } ${result ? '' : 'cursor-default'}`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[11px] text-slate-500">{from}</span>
-        {result ? (
-          result.correct === false ? (
-            <span className="text-[11px] text-rose-400" title={`Reference: ${humanize(result.expected)}`}>✗</span>
-          ) : result.correct ? (
-            <span className="text-[11px] text-emerald-400">✓</span>
-          ) : null
-        ) : (
-          running && <span className="h-2 w-2 animate-pulse rounded-full bg-violet-400" />
-        )}
-      </div>
-      <p className="mt-0.5 line-clamp-2 text-xs text-slate-200">{title}</p>
-      {result && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <OutcomeChip outcome={result.outcome} />
-          {result.correct === false && (
-            <span className="text-[10px] text-slate-500">ref: {humanize(result.expected)}</span>
-          )}
-        </div>
-      )}
-    </button>
+function Verdict({ result }) {
+  if (!result || result.correct == null) return null
+  return result.correct ? (
+    <span className="text-[12px] text-done" title="Matches the reference policy">✓</span>
+  ) : (
+    <span className="text-[12px] text-bad" title={`Reference policy: ${humanize(result.expected)}`}>✗</span>
   )
 }
 
-function Bars({ probabilities }) {
+function ItemRow({ item, result, running, onSelect }) {
+  const title = item.subject || item.message
+  const from = item.sender || item.channel
+  const clickable = Boolean(result)
+  return (
+    <li>
+      <button
+        onClick={() => clickable && onSelect(item.id)}
+        disabled={!clickable}
+        className="grid w-full grid-cols-[1fr_auto] gap-x-3 border-b border-rule px-4 py-2.5 text-left transition-colors hover:bg-paper disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        <span className="truncate text-[12px] text-ink-3">{from}</span>
+        <span className="row-span-2 flex flex-col items-end justify-between gap-1">
+          {result ? <Stamp outcome={result.outcome} /> : running && <span className="mt-1 h-1.5 w-1.5 animate-pulse rounded-full bg-jev" />}
+          <Verdict result={result} />
+        </span>
+        <span className="line-clamp-2 text-[13px] leading-snug text-ink">{title}</span>
+      </button>
+    </li>
+  )
+}
+
+function Bars({ probabilities, chosen }) {
   const entries = Object.entries(probabilities).sort((a, b) => b[1] - a[1])
   return (
     <div className="mt-2 space-y-1">
       {entries.map(([option, p]) => (
-        <div key={option} className="flex items-center gap-2 text-[11px]">
-          <span className="w-24 shrink-0 truncate text-slate-400" title={humanize(option)}>{humanize(option)}</span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full rounded-full bg-violet-400" style={{ width: `${p * 100}%` }} />
+        <div key={option} className="grid grid-cols-[88px_1fr_38px] items-center gap-2 text-[12px]">
+          <span className={`truncate ${option === chosen ? 'text-ink' : 'text-ink-3'}`} title={humanize(option)}>
+            {humanize(option)}
+          </span>
+          <div className="h-1.5 overflow-hidden rounded-full bg-jev-soft">
+            <div className="h-full rounded-full bg-jev" style={{ width: `${p * 100}%` }} />
           </div>
-          <span className="w-9 text-right font-mono text-slate-300">{Math.round(p * 100)}%</span>
+          <span className="num text-right text-ink-2">{Math.round(p * 100)}%</span>
         </div>
       ))}
     </div>
   )
 }
 
-function StepCard({ step, node }) {
+function StepRow({ step, node }) {
   if (step.kind === 'outcome') return null
   const k = KIND[step.kind]
   return (
-    <li className="rounded-lg border border-slate-800 bg-slate-900 p-3">
-      <div className="flex items-center gap-2">
-        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase ${k.chip}`}>{k.label}</span>
-        <span className="text-xs font-medium text-slate-200">{node?.label || step.node}</span>
-      </div>
-
-      {step.kind === 'code' && (
-        <p className="mt-2 font-mono text-[11px] text-slate-400">
-          {step.field} = {JSON.stringify(step.value)} → <span className="text-slate-200">{step.result ? 'yes' : 'no'}</span>
+    <li className="grid grid-cols-[16px_1fr] gap-2.5 border-b border-rule px-4 py-3">
+      <Glyph kind={step.kind} className={`mt-[3px] ${k.text}`} />
+      <div className="min-w-0">
+        <p className="text-[13px] text-ink">
+          {node?.label || step.node}{' '}
+          <span className={`font-cond text-[11px] font-semibold uppercase tracking-[0.07em] ${k.text}`}>{k.label}</span>
         </p>
-      )}
 
-      {step.kind === 'jev' && step.error && (
-        <p className="mt-2 text-[11px] text-rose-300">Jev unreachable — handed to a person.</p>
-      )}
-      {step.kind === 'jev' && !step.error && (
-        <>
-          {node?.question && <p className="mt-2 text-[11px] italic text-slate-400">“{node.question}”</p>}
-          <Bars probabilities={step.probabilities} />
-          <p className={`mt-2 text-[11px] ${step.confident ? 'text-slate-400' : 'text-amber-300'}`}>
-            Confidence {Math.round(step.confidence * 100)}% (needs {Math.round(step.threshold * 100)}%) —{' '}
-            {step.confident ? `follows “${humanize(step.choice)}”` : 'not sure enough, a person decides'}
-            <span className="text-slate-600"> · {step.latency_ms} ms</span>
+        {step.kind === 'code' && (
+          <p className="num mt-1 text-[12px] text-ink-2">
+            {step.field} = {JSON.stringify(step.value)} → {step.result ? 'yes' : 'no'}
           </p>
-        </>
-      )}
+        )}
 
-      {step.kind === 'llm' && (
-        <div className="mt-2 whitespace-pre-wrap rounded-md border border-cyan-500/20 bg-cyan-500/5 p-2.5 text-[12px] leading-relaxed text-cyan-50">
-          {step.text}
-        </div>
-      )}
+        {step.kind === 'jev' && step.error && (
+          <p className="mt-1 text-[12px] text-bad">Jev could not be reached, so a person decides.</p>
+        )}
+        {step.kind === 'jev' && !step.error && (
+          <>
+            {node?.question && <p className="mt-1 text-[12px] text-ink-2">{node.question}</p>}
+            <Bars probabilities={step.probabilities} chosen={step.choice} />
+            <p className={`mt-1.5 text-[12px] ${step.confident ? 'text-ink-2' : 'text-human'}`}>
+              <span className="num">{Math.round(step.confidence * 100)}%</span> sure, needs{' '}
+              <span className="num">{Math.round(step.threshold * 100)}%</span>.{' '}
+              {step.confident ? `Follows “${humanize(step.choice)}”.` : 'Not sure enough, so a person decides.'}
+              <span className="num text-ink-3"> {step.latency_ms} ms</span>
+            </p>
+          </>
+        )}
+
+        {step.kind === 'llm' && (
+          <div className="mt-2 whitespace-pre-wrap rounded-[3px] border border-rule bg-paper px-3 py-2.5 text-[13px] leading-relaxed text-ink">
+            {step.text}
+          </div>
+        )}
+      </div>
     </li>
   )
 }
@@ -105,33 +113,27 @@ function StepCard({ step, node }) {
 function Trace({ result, nodeMap, onBack }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-slate-800 p-3">
-        <button onClick={onBack} className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200">
-          ← Inbox
-        </button>
-        <span className="truncate text-xs text-slate-300">{result.title}</span>
+      <div className="border-b border-rule px-4 py-3">
+        <button onClick={onBack} className="text-[13px] text-llm hover:underline">← Back to inbox</button>
+        <p className="mt-1.5 text-[13px] leading-snug text-ink">{result.title}</p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <ol className="space-y-2">
-          {result.steps.map((step, i) => (
-            <StepCard key={i} step={step} node={nodeMap[step.node]} />
-          ))}
-        </ol>
-        <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-800 p-3 text-xs">
-          <span className="text-slate-400">Ends in</span>
-          <OutcomeChip outcome={result.outcome} />
-        </div>
+      <ol className="min-h-0 flex-1 overflow-y-auto">
+        {result.steps.map((step, i) => (
+          <StepRow key={i} step={step} node={nodeMap[step.node]} />
+        ))}
+        <li className="flex items-center justify-between px-4 py-3">
+          <span className="text-[13px] text-ink-2">Ends in</span>
+          <Stamp outcome={result.outcome} />
+        </li>
         {result.correct != null && (
-          <p className={`mt-2 text-[11px] ${result.correct ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {result.correct
-              ? 'Matches the reference policy.'
-              : `Reference policy says: ${humanize(result.expected)}.`}
-          </p>
+          <li className={`px-4 text-[12px] ${result.correct ? 'text-done' : 'text-bad'}`}>
+            {result.correct ? 'Matches the reference policy.' : `The reference policy says ${humanize(result.expected)}.`}
+          </li>
         )}
-        <p className="mt-2 text-[11px] text-slate-600">
+        <li className="num px-4 py-2 text-[12px] text-ink-3">
           {result.jev_calls} Jev · {result.llm_calls} LLM · {seconds(result.latency_ms)}
-        </p>
-      </div>
+        </li>
+      </ol>
     </div>
   )
 }
@@ -140,63 +142,73 @@ function Composer({ dataset, onRun, disabled }) {
   const [open, setOpen] = useState(false)
   const [values, setValues] = useState({})
   const textField = dataset.fields.body ? 'body' : 'message'
+  const noun = dataset.fields.body ? 'email' : 'message'
   const fields = Object.entries(dataset.fields)
   const filled = (values[textField] || '').trim().length > 0
+
   if (!open) {
     return (
-      <div className="border-t border-slate-800 p-3">
-        <button
-          onClick={() => setOpen(true)}
-          className="w-full rounded-md border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-300 hover:border-violet-500 hover:text-violet-200"
-        >
-          + Test your own {dataset.fields.body ? 'email' : 'message'}
+      <div className="border-t border-rule px-4 py-3">
+        <button onClick={() => setOpen(true)} className="text-[13px] text-llm hover:underline">
+          Test your own {noun}
         </button>
       </div>
     )
   }
+  const input =
+    'w-full rounded-[3px] border border-rule bg-paper px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-3 focus:border-ink-2 focus:outline-none'
   return (
-    <div className="space-y-2 border-t border-slate-800 p-3">
+    <form
+      className="space-y-2 border-t border-rule px-4 py-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        onRun(
+          Object.fromEntries(
+            fields.map(([name, type]) => [
+              name,
+              type === 'number' ? (values[name] ? Number(values[name]) : null) : values[name] || '',
+            ]),
+          ),
+        )
+      }}
+    >
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Test your own</p>
-        <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:text-slate-200">✕</button>
+        <h3 className="font-cond text-[13px] font-semibold text-ink-2">Test your own {noun}</h3>
+        <button type="button" onClick={() => setOpen(false)} className="text-[12px] text-ink-3 hover:text-ink">Close</button>
       </div>
       {fields.map(([name, type]) =>
         name === textField ? (
           <textarea
             key={name}
+            id={`custom-${name}`}
             rows={3}
-            placeholder={textField === 'body' ? 'Email text…' : 'Customer message…'}
+            aria-label={humanize(name)}
+            placeholder={noun === 'email' ? 'Email text' : 'Customer message'}
             value={values[name] || ''}
             onChange={(e) => setValues({ ...values, [name]: e.target.value })}
-            className="w-full resize-none rounded-md border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder-slate-600 focus:border-violet-500 focus:outline-none"
+            className={`${input} resize-none`}
           />
         ) : (
           <input
             key={name}
+            id={`custom-${name}`}
             type={type === 'number' ? 'number' : 'text'}
+            aria-label={humanize(name)}
             placeholder={humanize(name)}
             value={values[name] || ''}
             onChange={(e) => setValues({ ...values, [name]: e.target.value })}
-            className="w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:border-violet-500 focus:outline-none"
+            className={input}
           />
         ),
       )}
       <button
+        type="submit"
         disabled={disabled || !filled}
-        onClick={() => {
-          const item = Object.fromEntries(
-            fields.map(([name, type]) => [
-              name,
-              type === 'number' ? (values[name] === '' || values[name] == null ? null : Number(values[name])) : values[name] || '',
-            ]),
-          )
-          onRun(item)
-        }}
-        className="w-full rounded-md border border-violet-500/50 px-3 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+        className="w-full rounded-[3px] border border-ink px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-paper disabled:cursor-not-allowed disabled:opacity-40"
       >
         Run it through the workflow
       </button>
-    </div>
+    </form>
   )
 }
 
@@ -205,44 +217,36 @@ export default function InboxPanel({
 }) {
   const selected = selectedId && results[selectedId]
   const done = Object.keys(results).filter((id) => id !== 'custom').length
+  const noun = dataset.fields.body ? 'emails' : 'messages'
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-slate-800 bg-slate-900/60">
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-rule bg-sheet">
       {selected ? (
         <Trace result={selected} nodeMap={nodeMap} onBack={() => onSelect(null)} />
       ) : (
         <>
-          <div className="border-b border-slate-800 p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Step 2</p>
-            <h2 className="mt-0.5 text-sm font-semibold text-slate-100">Run it on the inbox</h2>
+          <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-4">
+            <div>
+              <h2 className="font-cond text-[17px] font-semibold text-ink">Inbox</h2>
+              <p className="num text-[12px] text-ink-3">
+                {running ? `${done} of ${dataset.items.length} processed` : `${dataset.items.length} ${noun}`}
+              </p>
+            </div>
             <button
               onClick={onRunInbox}
               disabled={!canRun || running}
-              className="mt-3 w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-[3px] bg-ink px-4 py-2 text-[14px] font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {running ? `Processing… ${done}/${dataset.items.length}` : `Run on ${dataset.items.length} ${dataset.id === 'accounts_payable' ? 'emails' : 'messages'}`}
+              {running ? 'Running…' : 'Run inbox'}
             </button>
-            {!canRun && <p className="mt-2 text-[11px] text-slate-500">Build a workflow first.</p>}
           </div>
-          <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+          <ul className="min-h-0 flex-1 overflow-y-auto">
             {results.custom && (
-              <ItemRow
-                item={{ id: 'custom', subject: results.custom.title, sender: 'your test' }}
-                result={results.custom}
-                selected={false}
-                onSelect={onSelect}
-              />
+              <ItemRow item={{ id: 'custom', subject: results.custom.title, sender: 'Your test' }} result={results.custom} onSelect={onSelect} />
             )}
             {dataset.items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                result={results[item.id]}
-                running={running}
-                selected={false}
-                onSelect={onSelect}
-              />
+              <ItemRow key={item.id} item={item} result={results[item.id]} running={running} onSelect={onSelect} />
             ))}
-          </div>
+          </ul>
           {canRun && <Composer dataset={dataset} onRun={onRunCustom} disabled={running} />}
         </>
       )}

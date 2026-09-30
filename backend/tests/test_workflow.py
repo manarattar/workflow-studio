@@ -302,6 +302,21 @@ class TestCompilerRepairLoop:
         assert "does not exist" in prompts[1]  # the problem was fed back
         assert result["repairs"] and "does not exist" in result["repairs"][0][0]
 
+    def test_missing_outcome_steps_are_added_by_code(self):
+        data = ap_workflow().model_dump()
+        data["nodes"] = [n for n in data["nodes"] if n["id"] != "blocked"]
+        data["nodes"][0]["routes"]["yes"] = "outcome_block_fraud"
+        compiler._add_missing_outcomes(data, list(AP["outcomes"]))
+        added = [n for n in data["nodes"] if n["id"] == "outcome_block_fraud"]
+        assert added and added[0]["outcome"] == "block_fraud"
+        assert check(Workflow.model_validate(data)) == []
+
+    def test_unknown_target_is_not_invented(self):
+        data = ap_workflow().model_dump()
+        data["nodes"][0]["routes"]["yes"] = "send_to_mars"
+        compiler._add_missing_outcomes(data, list(AP["outcomes"]))
+        assert not any(n["id"] == "send_to_mars" for n in data["nodes"])
+
     def test_gives_up_with_the_problems(self, monkeypatch):
         monkeypatch.setattr(
             compiler,
@@ -407,3 +422,9 @@ class TestApi:
             if line.startswith("data: ")
         ]
         assert stages == ["drafting", "problems", "drafting", "done"]
+
+
+def test_saved_reference_workflows_are_valid():
+    for dataset in DATASETS.values():
+        wf = Workflow.model_validate(dataset["reference_workflow"])
+        assert validate_workflow(wf, dataset["fields"], list(dataset["outcomes"])) == []

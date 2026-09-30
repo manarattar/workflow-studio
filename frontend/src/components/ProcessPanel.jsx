@@ -1,130 +1,134 @@
-import { usd, seconds } from '../theme'
+import { seconds, usd } from '../theme'
+
+const MARK = {
+  loaded: 'bg-done',
+  drafting: 'bg-llm',
+  problems: 'bg-human',
+  done: 'bg-done',
+  failed: 'bg-bad',
+}
 
 function LogLine({ entry }) {
-  if (entry.stage === 'drafting') {
-    return (
-      <li className="flex gap-2">
-        <span className="text-cyan-400">●</span>
-        <span>
-          {entry.attempt === 1 ? 'LLM drafts the workflow' : `LLM fixes it (attempt ${entry.attempt})`}
-          {entry.pending && <span className="ml-1 animate-pulse text-slate-500">…</span>}
-        </span>
-      </li>
+  let body
+  if (entry.stage === 'loaded') {
+    body = <p>Opened the saved workflow for this policy. Change the text and build to make your own.</p>
+  } else if (entry.stage === 'drafting') {
+    body = (
+      <p>
+        {entry.attempt === 1 ? 'LLM drafts the workflow' : `LLM corrects it, attempt ${entry.attempt}`}
+        {entry.pending && <span className="ml-1 animate-pulse text-ink-3">…</span>}
+      </p>
     )
-  }
-  if (entry.stage === 'problems') {
-    return (
-      <li className="flex gap-2">
-        <span className="text-amber-400">●</span>
-        <div>
-          <p>Validator caught {entry.problems.length} problem{entry.problems.length > 1 ? 's' : ''} — sent back</p>
-          <ul className="mt-1 space-y-1 text-[11px] leading-snug text-amber-200/70">
-            {entry.problems.slice(0, 4).map((p, i) => (
-              <li key={i} className="border-l border-amber-500/30 pl-2">{p}</li>
-            ))}
-            {entry.problems.length > 4 && <li className="pl-2">+{entry.problems.length - 4} more</li>}
-          </ul>
-        </div>
-      </li>
+  } else if (entry.stage === 'problems' || entry.stage === 'failed') {
+    const n = entry.problems?.length || 0
+    body = (
+      <div>
+        <p>
+          {entry.stage === 'failed'
+            ? 'No valid workflow after 4 attempts. Try describing the rules more plainly.'
+            : `Validator found ${n} problem${n === 1 ? '' : 's'} and sent them back`}
+        </p>
+        <ul className="mt-1.5 space-y-1 text-[12px] leading-snug text-ink-2">
+          {(entry.problems || []).slice(0, 3).map((p, i) => (
+            <li key={i} className="border-l border-rule pl-2">{p}</li>
+          ))}
+          {n > 3 && <li className="pl-2 text-ink-3">and {n - 3} more</li>}
+        </ul>
+      </div>
     )
-  }
-  if (entry.stage === 'done') {
+  } else {
     const r = entry.result
-    return (
-      <li className="flex gap-2">
-        <span className="text-emerald-400">●</span>
-        <span>
-          Valid workflow · {r.workflow.nodes.length} steps · {seconds(r.latency_ms)} · {usd(r.cost_usd)}
+    body = (
+      <p>
+        Valid workflow, {r.workflow.nodes.length} steps{' '}
+        <span className="num text-ink-3">
+          {seconds(r.latency_ms)} · {usd(r.cost_usd)}
         </span>
-      </li>
+      </p>
     )
   }
   return (
-    <li className="flex gap-2">
-      <span className="text-rose-400">●</span>
-      <div>
-        <p>Could not build a valid workflow</p>
-        <ul className="mt-1 space-y-1 text-[11px] text-rose-200/70">
-          {(entry.problems || []).slice(0, 4).map((p, i) => (
-            <li key={i} className="border-l border-rose-500/30 pl-2">{p}</li>
-          ))}
-        </ul>
-      </div>
+    <li className="grid grid-cols-[10px_1fr] gap-2">
+      <span className={`mt-[7px] h-1.5 w-1.5 rounded-full ${MARK[entry.stage]}`} />
+      <div className="text-[13px] leading-snug text-ink">{body}</div>
     </li>
   )
 }
 
 export default function ProcessPanel({ dataset, description, setDescription, onBuild, building, log }) {
-  const isReference = dataset && description.trim() === dataset.template.trim()
+  const isReference = description.trim() === dataset.template.trim()
   return (
-    <aside className="flex w-[340px] shrink-0 flex-col border-r border-slate-800 bg-slate-900/60">
-      <div className="border-b border-slate-800 p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Step 1</p>
-        <h2 className="mt-0.5 text-sm font-semibold text-slate-100">Describe the process in plain words</h2>
-        <p className="mt-1 text-xs leading-relaxed text-slate-400">
-          Write it the way you'd explain it to a new colleague. The LLM turns it into steps; you can
-          change any rule and rebuild.
-        </p>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={9}
-          maxLength={1500}
-          className="w-full shrink-0 resize-none rounded-lg border border-slate-700 bg-slate-950 p-3 text-[13px] leading-relaxed text-slate-100 placeholder-slate-600 focus:border-violet-500 focus:outline-none"
-          placeholder="e.g. Block anything that looks like fraud. Invoices over €1,000 need a manager…"
-        />
-        <div className="flex items-center justify-between text-[11px] text-slate-500">
-          {isReference ? (
-            <span>Reference policy for this inbox</span>
-          ) : (
-            <button className="text-violet-300 hover:underline" onClick={() => setDescription(dataset.template)}>
-              Reset to reference policy
-            </button>
-          )}
-          <span>{description.length}/1500</span>
+    <aside className="flex w-[340px] shrink-0 flex-col border-r border-rule bg-sheet">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+        <div>
+          <h2 className="font-cond text-[17px] font-semibold text-ink">The process</h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
+            Write it the way you'd brief a new colleague. The LLM turns it into steps; change any rule
+            and build again.
+          </p>
         </div>
 
-        {dataset.knowledge?.length > 0 && (
-          <details className="shrink-0 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs">
-            <summary className="cursor-pointer text-slate-400 hover:text-slate-200">
-              Knowledge base · {dataset.knowledge.length} facts the LLM may use
-            </summary>
-            <ul className="mt-2 space-y-1.5 text-[11px] leading-snug text-slate-400">
-              {dataset.knowledge.map((fact, i) => (
-                <li key={i} className="border-l border-cyan-500/30 pl-2">{fact}</li>
-              ))}
-            </ul>
-            <p className="mt-2 text-[11px] text-slate-500">
-              Drafts may only use these facts. Anything else gets “a colleague will follow up”, never a
-              made-up answer.
-            </p>
-          </details>
-        )}
+        <div>
+          <label htmlFor="process" className="sr-only">Process description</label>
+          <textarea
+            id="process"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={10}
+            maxLength={1500}
+            className="w-full shrink-0 resize-y rounded-[3px] border border-rule bg-paper px-3 py-2.5 text-[13.5px] leading-relaxed text-ink placeholder:text-ink-3 focus:border-ink-2 focus:outline-none"
+            placeholder="Block anything that looks like fraud. Invoices over €1,000 need a manager…"
+          />
+          <div className="mt-1 flex items-center justify-between text-[12px] text-ink-3">
+            {isReference ? (
+              <span>Reference policy</span>
+            ) : (
+              <button className="text-llm hover:underline" onClick={() => setDescription(dataset.template)}>
+                Restore reference policy
+              </button>
+            )}
+            <span className="num">{description.length}/1500</span>
+          </div>
+        </div>
 
         <button
           onClick={onBuild}
           disabled={building || !description.trim()}
-          className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-[3px] bg-ink px-4 py-2.5 text-[14px] font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {building ? 'Building workflow…' : 'Build workflow'}
+          {building ? 'Building…' : 'Build workflow'}
         </button>
 
+        {dataset.knowledge?.length > 0 && (
+          <details className="border-t border-rule pt-3 text-[13px]">
+            <summary className="cursor-pointer font-cond font-semibold text-ink-2 hover:text-ink">
+              Facts the LLM may use <span className="num font-normal text-ink-3">({dataset.knowledge.length})</span>
+            </summary>
+            <ul className="mt-2 space-y-1.5 text-[12.5px] leading-snug text-ink-2">
+              {dataset.knowledge.map((fact, i) => (
+                <li key={i} className="border-l border-rule pl-2">{fact}</li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[12px] leading-snug text-ink-3">
+              Drafted replies may only use these facts. For anything else they say a colleague will
+              follow up.
+            </p>
+          </details>
+        )}
+
         {log.length > 0 && (
-          <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Build log</p>
-            <ul className="space-y-2 text-xs text-slate-300">
+          <section className="border-t border-rule pt-3">
+            <h3 className="font-cond text-[13px] font-semibold text-ink-2">Build log</h3>
+            <ol className="mt-2 space-y-2.5">
               {log.map((entry, i) => (
                 <LogLine key={i} entry={entry} />
               ))}
-            </ul>
-            <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-              The LLM's output is never trusted as-is: every draft is checked (steps exist, no loops,
-              numbers handled by code, options described concretely) and problems go back to it.
+            </ol>
+            <p className="mt-3 text-[12px] leading-snug text-ink-3">
+              Every draft is checked before it runs: steps exist, nothing loops, amounts are compared in
+              code, decisions are described concretely. Problems go back to the LLM.
             </p>
-          </div>
+          </section>
         )}
       </div>
     </aside>

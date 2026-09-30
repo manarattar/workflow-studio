@@ -10,38 +10,39 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
+import Glyph from './Glyph'
 import { HUMAN_REVIEW, KIND, NODE_KIND, humanize } from '../theme'
 
-const NODE_W = 200
-const NODE_H = 70
+const NODE_W = 196
+const NODE_H = 76
 
 function StepNode({ data }) {
   const k = KIND[data.kind]
+  const review = data.kind === 'human'
   return (
     <div
       style={{ width: NODE_W }}
-      className={`rounded-xl border bg-slate-900/95 px-3 py-2.5 shadow-lg transition-all duration-300 ${k.border} ${
-        data.onPath ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-slate-950' : ''
-      } ${data.dimmed ? 'opacity-25' : ''} ${data.clickable ? 'cursor-pointer hover:bg-slate-800' : ''}`}
+      className={`rounded-[3px] border bg-sheet px-3 py-2 transition-[opacity,box-shadow] duration-200 ${
+        review ? 'border-dashed border-human' : 'border-rule'
+      } ${data.onPath ? 'shadow-[0_0_0_2px_var(--ink)]' : 'shadow-[0_1px_2px_rgba(20,30,40,0.06)]'} ${
+        data.dimmed ? 'opacity-30' : ''
+      } ${data.clickable ? 'cursor-pointer hover:border-jev' : ''}`}
     >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-slate-600" />
-      <div className="flex items-center justify-between gap-2">
-        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${k.chip}`}>
-          {k.label}
-        </span>
-        {data.count > 0 && (
-          <span className="rounded-full bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-slate-200">
-            {data.count}
-          </span>
-        )}
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !border-0 !bg-ink-3" />
+      <div className={`flex items-center gap-1.5 font-cond text-[11px] font-semibold uppercase tracking-[0.07em] ${k.text}`}>
+        <Glyph kind={data.kind} />
+        <span>{k.label}</span>
+        {data.count > 0 && <span className="num ml-auto text-[11px] font-medium tracking-normal text-ink-2">{data.count}</span>}
       </div>
-      <p className="mt-1.5 truncate text-[13px] font-medium text-slate-100" title={data.label}>
+      <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-ink" title={data.label}>
         {data.label}
       </p>
       {data.threshold != null && (
-        <p className="mt-0.5 text-[10px] text-violet-300/80">acts when ≥ {Math.round(data.threshold * 100)}% sure</p>
+        <p className="mt-0.5 text-[11px] text-ink-3">
+          acts at <span className="num">{Math.round(data.threshold * 100)}%</span> sure or more
+        </p>
       )}
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-slate-600" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !border-0 !bg-ink-3" />
     </div>
   )
 }
@@ -57,12 +58,11 @@ function linksOf(node) {
 
 function buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }) {
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 80 })
+  g.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 78 })
   g.setDefaultEdgeLabel(() => ({}))
 
   const steps = [...workflow.nodes]
-  const hasJev = steps.some((n) => n.type === 'decide')
-  if (hasJev && !steps.some((n) => n.id === HUMAN_REVIEW)) {
+  if (steps.some((n) => n.type === 'decide') && !steps.some((n) => n.id === HUMAN_REVIEW)) {
     steps.push({ id: HUMAN_REVIEW, type: 'outcome', label: 'Human review', outcome: HUMAN_REVIEW })
   }
   steps.forEach((n) => g.setNode(n.id, { width: NODE_W, height: NODE_H }))
@@ -76,29 +76,30 @@ function buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }) {
     g.setEdge(source, target)
     const count = edgeCounts[`${source}>${target}`] || 0
     const taken = takenEdge(source, target)
-    const colour = review ? KIND.human.hex : taken ? '#38bdf8' : count ? '#64748b' : '#334155'
     edges.push({
       id: `${source}>${target}>${label}`,
       source,
       target,
-      label: count ? `${label ? `${label} · ` : ''}${count}` : label,
-      animated: taken || (count > 0 && !path),
+      label: count ? `${label ? `${label}  ` : ''}${count}` : label,
       style: {
-        stroke: colour,
-        strokeWidth: taken ? 3 : 1.2 + (count / maxCount) * 3.5,
-        strokeDasharray: review ? '6 5' : undefined,
-        opacity: path && !taken ? 0.35 : 1,
+        stroke: review ? 'var(--human)' : taken || count ? 'var(--ink-2)' : 'var(--ink-3)',
+        strokeWidth: taken ? 2.6 : 1 + (count / maxCount) * 3,
+        strokeDasharray: review ? '5 4' : undefined,
+        opacity: path && !taken ? 0.3 : 1,
       },
-      labelStyle: { fontSize: 11, fill: review ? '#fcd34d' : '#cbd5e1', fontWeight: 500 },
-      labelBgStyle: { fill: '#0f172a', fillOpacity: 0.9 },
-      labelBgPadding: [5, 3],
-      labelBgBorderRadius: 4,
+      labelStyle: {
+        fontSize: 11,
+        fill: review ? 'var(--human)' : 'var(--ink-2)',
+        fontFamily: 'var(--font-mono)',
+      },
+      labelBgStyle: { fill: 'var(--paper)' },
+      labelBgPadding: [4, 2],
     })
   }
 
   workflow.nodes.forEach((n) => {
     linksOf(n).forEach((link) => addEdge(n.id, link.to, link.label, false))
-    // any Jev step can hand the item to a person when it isn't sure enough
+    // any Jev step hands the item to a person when it isn't sure enough
     if (n.type === 'decide') addEdge(n.id, HUMAN_REVIEW, 'unsure', true)
   })
 
@@ -128,9 +129,9 @@ export default function WorkflowCanvas({ workflow, path, nodeCounts, edgeCounts,
     () => buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }),
     [workflow, path, nodeCounts, edgeCounts, thresholds],
   )
-  // React Flow v12 keeps nodes hidden until it has measured them, and reports the
-  // measurements through onNodesChange - so it owns the node state and each new
-  // layout (counts, highlighted path) is pushed into it, keeping those measurements.
+  // React Flow v12 keeps nodes hidden until it has measured them and reports the
+  // measurements through onNodesChange, so it owns the node state; each new layout
+  // (counts, highlighted path) is pushed in while keeping those measurements.
   const [nodes, setNodes, onNodesChange] = useNodesState(graph.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges)
   useEffect(() => {
@@ -148,15 +149,15 @@ export default function WorkflowCanvas({ workflow, path, nodeCounts, edgeCounts,
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
-      colorMode="dark"
+      colorMode="system"
       fitView
-      fitViewOptions={{ padding: 0.18 }}
+      fitViewOptions={{ padding: 0.16 }}
       minZoom={0.3}
       nodesDraggable={false}
       nodesConnectable={false}
       onNodeClick={(_, node) => onSelectStep?.(node.id)}
     >
-      <Background gap={22} size={1.2} color="#1e293b" />
+      <Background gap={24} size={1.4} color="var(--grid)" />
       <Controls showInteractive={false} />
     </ReactFlow>
   )
