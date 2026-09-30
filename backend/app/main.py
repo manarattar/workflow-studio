@@ -2,19 +2,22 @@ import json
 import time
 from collections import defaultdict, deque
 
+from app import store
 from app.compiler import MAX_DESCRIPTION_CHARS, compile_steps
 from app.datasets import DATASETS
-from app.executor import run_items
-from app.models import Workflow, validate_workflow
-from fastapi import FastAPI, HTTPException, Request
+from app.executor import run_item, run_items
+from app.models import HUMAN_REVIEW, Workflow, validate_workflow
+from app.specs import ProjectSpec, clean_item
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, ValidationError
 
 app = FastAPI(
-    title="Workflow Studio API",
+    title="Routing Slip API",
     description="Plain-language process -> workflow that runs on code, Jev and an LLM",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -26,8 +29,13 @@ app.add_middleware(
 )
 
 # A public demo spends real API credit, so each visitor gets a small budget per hour.
-RATE_LIMITS = {"compile": 20, "run": 30}
+RATE_LIMITS = {"compile": 20, "run": 30, "publish": 20}
 _calls: dict = defaultdict(deque)
+
+# A published endpoint may be called at most this often per day (the run log keeps
+# the last 100 calls, so the quota can be counted from it).
+HOOK_DAILY_QUOTA = 100
+MAX_HOOK_BODY = 16_000
 
 
 def _client_ip(request: Request) -> str:
@@ -50,22 +58,65 @@ def _check_rate(request: Request, action: str) -> None:
     calls.append(now)
 
 
-def _dataset(dataset_id: str) -> dict:
-    if dataset_id not in DATASETS:
-        raise HTTPException(404, f"Unknown dataset '{dataset_id}'")
-    return DATASETS[dataset_id]
+def _resolve(dataset_id: str | None, project: dict | None) -> dict:
+    """A built-in sample inbox, or the user's own project spec in the same shape."""
+    if project is not None:
+        try:
+            return ProjectSpec.model_validate(project).as_dataset()
+        except ValidationError as error:
+            messages = [e["msg"].removeprefix("Value error, ") for e in error.errors()]
+            raise HTTPException(
+                422, {"message": "The project isn't valid", "problems": messages}
+            )
+    if dataset_id in DATASETS:
+        return DATASETS[dataset_id]
+    raise HTTPException(404, f"Unknown dataset '{dataset_id}'")
+
+
+def _checked_workflow(raw: dict, dataset: dict) -> Workflow:
+    try:
+        workflow = Workflow.model_validate(raw)
+    except ValidationError as error:
+        raise HTTPException(
+            422, {"message": "Invalid workflow", "problems": [str(error)[:300]]}
+        )
+    problems = validate_workflow(workflow, dataset["fields"], list(dataset["outcomes"]))
+    if problems:
+        raise HTTPException(422, {"message": "Invalid workflow", "problems": problems})
+    return workflow
+
+
+def _sse(events):
+    def stream():
+        for event in events:
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 class CompileRequest(BaseModel):
-    dataset_id: str
+    dataset_id: str | None = None
+    project: dict | None = None
     description: str = Field(max_length=MAX_DESCRIPTION_CHARS)
 
 
 class RunRequest(BaseModel):
-    dataset_id: str
+    dataset_id: str | None = None
+    project: dict | None = None
     workflow: dict
-    # run one pasted item instead of the whole sample inbox
+    # run one pasted item instead of the whole inbox
     custom_item: dict | None = None
+
+
+class ValidateRequest(BaseModel):
+    dataset_id: str | None = None
+    project: dict | None = None
+    workflow: dict
+
+
+class PublishRequest(BaseModel):
+    project: dict
+    workflow: dict
 
 
 @app.get("/api/health")
@@ -75,59 +126,165 @@ def health():
 
 @app.get("/api/datasets")
 def datasets():
-    return [
-        {
-            k: d[k]
-            for k in (
-                "id", "name", "blurb", "fields", "outcomes", "template", "knowledge",
-                "reference_workflow", "items",
-            )
-        }
-        for d in DATASETS.values()
-    ]
+    keys = (
+        "id",
+        "name",
+        "blurb",
+        "fields",
+        "outcomes",
+        "template",
+        "knowledge",
+        "reference_workflow",
+        "items",
+    )
+    return [{k: d[k] for k in keys} for d in DATASETS.values()]
 
 
 @app.post("/api/compile")
 def compile_endpoint(body: CompileRequest, request: Request):
     """Streams the build log: drafting, problems found and fixed, then the workflow."""
-    dataset = _dataset(body.dataset_id)
+    dataset = _resolve(body.dataset_id, body.project)
     _check_rate(request, "compile")
-
-    def event_stream():
-        for event in compile_steps(body.description, dataset):
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return _sse(compile_steps(body.description, dataset))
 
 
 @app.post("/api/run")
 def run_endpoint(body: RunRequest, request: Request):
-    dataset = _dataset(body.dataset_id)
-    try:
-        workflow = Workflow.model_validate(body.workflow)
-    except ValidationError as error:
-        raise HTTPException(422, f"Invalid workflow: {str(error)[:300]}")
-    # the browser can edit thresholds, so a workflow is re-checked before it runs
-    problems = validate_workflow(workflow, dataset["fields"], list(dataset["outcomes"]))
-    if problems:
-        raise HTTPException(422, {"message": "Invalid workflow", "problems": problems})
+    dataset = _resolve(body.dataset_id, body.project)
+    # the browser can edit any step, so a workflow is re-checked before it runs
+    workflow = _checked_workflow(body.workflow, dataset)
 
     if body.custom_item is not None:
-        item = {k: body.custom_item.get(k) for k in dataset["fields"]}
-        text_len = sum(len(str(v or "")) for v in item.values())
-        if text_len == 0 or text_len > 4000:
-            raise HTTPException(
-                400, "Custom item must have some text and at most 4000 characters"
-            )
+        item, problems = clean_item(body.custom_item, dataset["fields"])
+        if problems:
+            raise HTTPException(400, " ".join(problems))
         items = [{"id": "custom", **item}]
     else:
         items = dataset["items"]
+        if not items:
+            raise HTTPException(
+                400, "Add some example items to the project before running it."
+            )
     _check_rate(request, "run")
+    return _sse(
+        run_items(workflow, items, dataset["fields"], dataset.get("knowledge", []))
+    )
 
-    def event_stream():
-        for event in run_items(
-            workflow, items, dataset["fields"], dataset.get("knowledge", [])
-        ):
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+@app.post("/api/validate")
+def validate_endpoint(body: ValidateRequest):
+    """Checks an edited workflow without running it - used by the canvas editor."""
+    dataset = _resolve(body.dataset_id, body.project)
+    try:
+        workflow = Workflow.model_validate(body.workflow)
+    except ValidationError as error:
+        return {"problems": [e["msg"] for e in error.errors()][:5]}
+    return {
+        "problems": validate_workflow(
+            workflow, dataset["fields"], list(dataset["outcomes"])
+        )
+    }
+
+
+# ---- published projects: a workflow behind an endpoint, no account needed ----
+
+
+def _public_spec(project: dict) -> dict:
+    """What the server keeps: the definition, never the example items."""
+    return {k: project[k] for k in ("name", "fields", "outcomes", "knowledge")}
+
+
+def _authorised(project_id: str, key: str | None) -> dict:
+    project = store.get_project(project_id, key)
+    if project is None:
+        # same answer for "no such project" and "wrong key", so ids can't be probed
+        raise HTTPException(401, "Unknown project or wrong X-Routing-Key.")
+    return project
+
+
+@app.post("/api/projects")
+def publish(body: PublishRequest, request: Request):
+    dataset = _resolve(None, {**body.project, "items": []})
+    workflow = _checked_workflow(body.workflow, dataset)
+    _check_rate(request, "publish")
+    project_id, key = store.create_project(_public_spec(dataset), workflow.model_dump())
+    return {"id": project_id, "api_key": key, "endpoint": f"/api/hooks/{project_id}"}
+
+
+@app.put("/api/projects/{project_id}")
+def update(
+    project_id: str, body: PublishRequest, x_routing_key: str | None = Header(None)
+):
+    _authorised(project_id, x_routing_key)
+    dataset = _resolve(None, {**body.project, "items": []})
+    workflow = _checked_workflow(body.workflow, dataset)
+    store.update_project(project_id, _public_spec(dataset), workflow.model_dump())
+    return {"id": project_id, "updated": True}
+
+
+@app.delete("/api/projects/{project_id}")
+def unpublish(project_id: str, x_routing_key: str | None = Header(None)):
+    _authorised(project_id, x_routing_key)
+    store.delete_project(project_id)
+    return {"id": project_id, "deleted": True}
+
+
+@app.get("/api/projects/{project_id}/runs")
+def runs(project_id: str, x_routing_key: str | None = Header(None)):
+    _authorised(project_id, x_routing_key)
+    return {"runs": store.recent_runs(project_id)}
+
+
+@app.post("/api/hooks/{project_id}")
+async def hook(
+    project_id: str, request: Request, x_routing_key: str | None = Header(None)
+):
+    """Run one item through a published workflow and return the decision."""
+    project = _authorised(project_id, x_routing_key)
+    raw = await request.body()
+    if len(raw) > MAX_HOOK_BODY:
+        raise HTTPException(413, f"The item is larger than {MAX_HOOK_BODY // 1000} KB.")
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Send the item as a JSON object.")
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "Send the item as a JSON object.")
+
+    spec = project["spec"]
+    item, problems = clean_item(payload, spec["fields"])
+    if problems:
+        raise HTTPException(400, " ".join(problems))
+    midnight = time.time() - time.time() % 86400
+    if store.runs_since(project_id, midnight) >= HOOK_DAILY_QUOTA:
+        raise HTTPException(
+            429,
+            f"This endpoint has reached its limit of {HOOK_DAILY_QUOTA} items today.",
+        )
+
+    workflow = Workflow.model_validate(project["workflow"])
+    # model calls block, so they run in a worker thread, not on the event loop
+    result = await run_in_threadpool(
+        run_item,
+        workflow, {"id": "hook", **item}, spec["fields"], spec.get("knowledge", [])
+    )
+    response = {
+        "outcome": result["outcome"],
+        "needs_person": result["outcome"] == HUMAN_REVIEW,
+        "decisions": [
+            {
+                "step": s["node"],
+                "answer": s.get("choice"),
+                "confidence": s.get("confidence"),
+            }
+            for s in result["steps"]
+            if s["kind"] == "jev"
+        ],
+        "drafts": [s["text"] for s in result["steps"] if s["kind"] == "llm"],
+        "steps": result["steps"],
+        "cost_usd": round(result["cost_usd"], 6),
+        "latency_ms": result["latency_ms"],
+    }
+    text = " | ".join(str(v) for v in item.values() if v not in (None, ""))
+    store.log_run(project_id, text, response)
+    return response
