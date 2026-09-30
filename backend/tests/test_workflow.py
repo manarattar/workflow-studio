@@ -366,7 +366,7 @@ class TestApi:
 
     def test_datasets(self):
         body = self.client.get("/api/datasets").json()
-        assert {d["id"] for d in body} == {"accounts_payable", "bank_support"}
+        assert {d["id"] for d in body} == {"accounts_payable", "bank_support", "expense_claims", "it_helpdesk"}
 
     def test_run_streams_items_then_summary(self, fake_models):
         fake_models["only"] = 0.02

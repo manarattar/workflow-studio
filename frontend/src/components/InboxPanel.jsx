@@ -140,11 +140,12 @@ function Trace({ result, nodeMap, onBack }) {
 
 /** The main text field of an item: where a person types the message itself. */
 const textFieldOf = (dataset) =>
-  dataset.fields.body ? 'body' : dataset.fields.message ? 'message' : dataset.display?.titleField
+  dataset.fields.body ? 'body' : dataset.display?.titleField || (dataset.fields.message ? 'message' : undefined)
 
+/** What the items are called: emails, claims, tickets - or plain "items" for a custom project. */
 const nounOf = (dataset, plural) => {
-  const one = dataset.fields.body ? 'email' : dataset.custom ? 'item' : 'message'
-  return plural ? `${one}s` : one
+  const [one, many] = dataset.noun || ['item', 'items']
+  return plural ? many : one
 }
 
 function Composer({ dataset, onRun, onAddExample, disabled }) {

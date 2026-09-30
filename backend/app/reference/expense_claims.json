@@ -1,0 +1,83 @@
+{
+  "name": "Expense Claim Workflow",
+  "start": "check_personal",
+  "nodes": [
+    {
+      "type": "decide",
+      "id": "check_personal",
+      "label": "Check Personal Expense",
+      "kind": "yes_no",
+      "question": "Is the expense clearly personal rather than business?",
+      "options": {
+        "yes": "The expense is personal, such as a family holiday, a gift for a relative, or a gym membership.",
+        "no": "The expense is business-related, such as travel for a meeting, office supplies, or client meals."
+      },
+      "routes": {
+        "yes": "reject_expense",
+        "no": "check_receipt"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "outcome",
+      "id": "reject_expense",
+      "label": "Reject Expense",
+      "outcome": "reject"
+    },
+    {
+      "type": "condition",
+      "id": "check_receipt",
+      "label": "Check Receipt",
+      "field": "receipt",
+      "operator": "==",
+      "value": "no",
+      "if_true": "check_amount_high",
+      "if_false": "check_amount_high_500"
+    },
+    {
+      "type": "condition",
+      "id": "check_amount_high",
+      "label": "Check Amount Over 25",
+      "field": "amount_eur",
+      "operator": ">",
+      "value": 25.0,
+      "if_true": "request_receipt",
+      "if_false": "check_amount_high_500"
+    },
+    {
+      "type": "write",
+      "id": "request_receipt",
+      "label": "Request Receipt",
+      "instructions": "Write to the employee asking them to upload the receipt.",
+      "next": "request_receipt_outcome"
+    },
+    {
+      "type": "outcome",
+      "id": "request_receipt_outcome",
+      "label": "Request Receipt Outcome",
+      "outcome": "request_receipt"
+    },
+    {
+      "type": "condition",
+      "id": "check_amount_high_500",
+      "label": "Check Amount Over 500",
+      "field": "amount_eur",
+      "operator": ">",
+      "value": 500.0,
+      "if_true": "manager_approval",
+      "if_false": "approve_expense"
+    },
+    {
+      "type": "outcome",
+      "id": "manager_approval",
+      "label": "Manager Approval Needed",
+      "outcome": "manager_approval"
+    },
+    {
+      "type": "outcome",
+      "id": "approve_expense",
+      "label": "Approve Expense",
+      "outcome": "approve"
+    }
+  ]
+}

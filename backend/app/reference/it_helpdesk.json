@@ -1,0 +1,107 @@
+{
+  "name": "IT Ticket Triage",
+  "start": "check_security_incident",
+  "nodes": [
+    {
+      "type": "decide",
+      "id": "check_security_incident",
+      "label": "Check Security Incident",
+      "kind": "yes_no",
+      "question": "Is this a possible security incident?",
+      "options": {
+        "yes": "A clicked phishing link, a lost or stolen device, or a hacked account",
+        "no": "This is not a security incident, such as a general inquiry or a request for assistance, like 'I need help with my email' or 'How do I reset my password?'"
+      },
+      "routes": {
+        "yes": "outcome_security_incident",
+        "no": "check_hardware"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "decide",
+      "id": "check_hardware",
+      "label": "Check Hardware Issue",
+      "kind": "yes_no",
+      "question": "Is this a hardware issue?",
+      "options": {
+        "yes": "This is a hardware issue, such as a broken laptop screen, a malfunctioning printer, or a device that won't turn on.",
+        "no": "This is not a hardware issue, such as a software problem or a question about account access, like 'I can't log in' or 'My application is crashing.'"
+      },
+      "routes": {
+        "yes": "outcome_hardware_team",
+        "no": "check_access_request"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "decide",
+      "id": "check_access_request",
+      "label": "Check Access Request",
+      "kind": "yes_no",
+      "question": "Is this an access request?",
+      "options": {
+        "yes": "This is an access request, such as asking for permission to access a shared drive or requesting to remove access to a system.",
+        "no": "This is not an access request, such as a general question or a report of an issue, like 'I need to update my profile' or 'Can you help me with my settings?'."
+      },
+      "routes": {
+        "yes": "outcome_access_request",
+        "no": "check_common_how_to"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "decide",
+      "id": "check_common_how_to",
+      "label": "Check Common How-To Question",
+      "kind": "yes_no",
+      "question": "Is this a common how-to question?",
+      "options": {
+        "yes": "This is a common how-to question, such as how to reset a password, how to set up the VPN, or how to add a printer.",
+        "no": "This is not a common how-to question, such as a specific technical issue or a request for a feature, like 'Why is my internet slow?' or 'Can I get a new software installed?'."
+      },
+      "routes": {
+        "yes": "write_auto_reply",
+        "no": "outcome_general_queue"
+      },
+      "min_confidence": null
+    },
+    {
+      "type": "write",
+      "id": "write_auto_reply",
+      "label": "Draft Auto Reply",
+      "instructions": "Draft a reply for a common how-to question based on the knowledge base.",
+      "next": "outcome_auto_reply"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_security_incident",
+      "label": "Security Incident",
+      "outcome": "security_incident"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_hardware_team",
+      "label": "Hardware Team",
+      "outcome": "hardware_team"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_access_request",
+      "label": "Access Request",
+      "outcome": "access_request"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_auto_reply",
+      "label": "Auto Reply",
+      "outcome": "auto_reply"
+    },
+    {
+      "type": "outcome",
+      "id": "outcome_general_queue",
+      "label": "General Queue",
+      "outcome": "general_queue"
+    }
+  ]
+}

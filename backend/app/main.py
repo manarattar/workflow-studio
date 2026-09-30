@@ -11,8 +11,8 @@ from app.specs import ProjectSpec, clean_item
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, ValidationError
+from starlette.concurrency import run_in_threadpool
 
 app = FastAPI(
     title="Routing Slip API",
@@ -136,6 +136,8 @@ def datasets():
         "knowledge",
         "reference_workflow",
         "items",
+        "noun",
+        "display",
     )
     return [{k: d[k] for k in keys} for d in DATASETS.values()]
 
@@ -266,7 +268,10 @@ async def hook(
     # model calls block, so they run in a worker thread, not on the event loop
     result = await run_in_threadpool(
         run_item,
-        workflow, {"id": "hook", **item}, spec["fields"], spec.get("knowledge", [])
+        workflow,
+        {"id": "hook", **item},
+        spec["fields"],
+        spec.get("knowledge", []),
     )
     response = {
         "outcome": result["outcome"],

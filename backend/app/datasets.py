@@ -325,7 +325,317 @@ BANK_SUPPORT = {
     ],
 }
 
-DATASETS = {d["id"]: d for d in (ACCOUNTS_PAYABLE, BANK_SUPPORT)}
+EXPENSE_CLAIMS = {
+    "id": "expense_claims",
+    "name": "Expense claims",
+    "blurb": "Employee expenses: receipts, limits, and business versus personal",
+    "noun": ["claim", "claims"],
+    "display": {"titleField": "description", "fromField": "employee"},
+    "fields": {
+        "employee": "text",
+        "description": "text",
+        "amount_eur": "number",
+        "category": "text",
+        "receipt": "text",
+    },
+    "always_filled": ["employee", "description", "amount_eur", "category", "receipt"],
+    "knowledge": [
+        "Messages are sent by the Finance team of Northwind Retail B.V.",
+        "A receipt is required for every expense over EUR 25.",
+        "Receipts are uploaded in the expense app under Claims > Attach receipt.",
+        "Approved claims are paid with the next monthly salary run.",
+    ],
+    "outcomes": {
+        "approve": "A business expense within policy that can be paid",
+        "request_receipt": "A business expense over EUR 25 without a receipt, so the employee is asked for it",
+        "manager_approval": "A business expense over EUR 500 that a manager must approve",
+        "reject": "Clearly personal rather than business, so it is not reimbursed",
+    },
+    "template": (
+        "Check each expense claim. Reject anything that is clearly personal rather than "
+        "business, like a family holiday, a present for a relative or a private gym membership. "
+        "If there is no receipt and the amount is over EUR 25, write to the employee asking them "
+        "to upload the receipt. Claims over EUR 500 need manager approval. Everything else is "
+        "approved."
+    ),
+    "items": [
+        {
+            "id": "ex-01",
+            "employee": "Sanne de Wit",
+            "description": "Train ticket Amsterdam to Utrecht for a client visit",
+            "amount_eur": 18.40,
+            "category": "travel",
+            "receipt": "yes",
+            "expected": "approve",
+        },
+        {
+            "id": "ex-02",
+            "employee": "Omar Haddad",
+            "description": "Lunch with the Northbridge account manager to discuss the contract renewal",
+            "amount_eur": 86.50,
+            "category": "meals",
+            "receipt": "yes",
+            "expected": "approve",
+        },
+        {
+            "id": "ex-03",
+            "employee": "Lisa Janssen",
+            "description": "Hotel, three nights in Berlin for the retail tech conference",
+            "amount_eur": 612.00,
+            "category": "travel",
+            "receipt": "yes",
+            "expected": "manager_approval",
+        },
+        {
+            "id": "ex-04",
+            "employee": "Omar Haddad",
+            "description": "Taxi from Schiphol after the late flight back from the client workshop",
+            "amount_eur": 54.00,
+            "category": "travel",
+            "receipt": "no",
+            "expected": "request_receipt",
+        },
+        {
+            "id": "ex-05",
+            "employee": "Tim Bakker",
+            "description": "Birthday present for my wife",
+            "amount_eur": 120.00,
+            "category": "other",
+            "receipt": "yes",
+            "expected": "reject",
+        },
+        {
+            "id": "ex-06",
+            "employee": "Lisa Janssen",
+            "description": "Annual Figma licence for the design team",
+            "amount_eur": 540.00,
+            "category": "software",
+            "receipt": "yes",
+            "expected": "manager_approval",
+        },
+        {
+            "id": "ex-07",
+            "employee": "Sanne de Wit",
+            "description": "Parking at the client's office in Rotterdam",
+            "amount_eur": 12.00,
+            "category": "travel",
+            "receipt": "no",
+            "expected": "approve",
+        },
+        {
+            "id": "ex-08",
+            "employee": "Tim Bakker",
+            "description": "Family weekend in Paris",
+            "amount_eur": 890.00,
+            "category": "travel",
+            "receipt": "yes",
+            "expected": "reject",
+        },
+        {
+            "id": "ex-09",
+            "employee": "Noor Visser",
+            "description": "USB-C cables and a monitor adapter for my work laptop",
+            "amount_eur": 39.90,
+            "category": "equipment",
+            "receipt": "no",
+            "expected": "request_receipt",
+        },
+        {
+            "id": "ex-10",
+            "employee": "Noor Visser",
+            "description": "Team dinner for eight people after the product launch",
+            "amount_eur": 410.00,
+            "category": "meals",
+            "receipt": "yes",
+            "expected": "approve",
+        },
+        {
+            "id": "ex-11",
+            "employee": "Omar Haddad",
+            "description": "Coffee with a job candidate during the interview",
+            "amount_eur": 9.60,
+            "category": "meals",
+            "receipt": "no",
+            "expected": "approve",
+        },
+        {
+            "id": "ex-12",
+            "employee": "Sanne de Wit",
+            "description": "Office chair for my home office, agreed with my manager",
+            "amount_eur": 489.00,
+            "category": "equipment",
+            "receipt": "yes",
+            "expected": "approve",
+        },
+        {
+            "id": "ex-13",
+            "employee": "Tim Bakker",
+            "description": "Gym membership for the year",
+            "amount_eur": 360.00,
+            "category": "other",
+            "receipt": "yes",
+            "expected": "reject",
+        },
+        {
+            "id": "ex-14",
+            "employee": "Lisa Janssen",
+            "description": "Return flight to Lisbon for the client workshop",
+            "amount_eur": 780.00,
+            "category": "travel",
+            "receipt": "no",
+            "expected": "request_receipt",
+        },
+    ],
+}
+
+IT_HELPDESK = {
+    "id": "it_helpdesk",
+    "name": "IT helpdesk",
+    "blurb": "Internal IT tickets: security incidents, hardware, access requests, how-to questions",
+    "noun": ["ticket", "tickets"],
+    "display": {"titleField": "message", "fromField": "employee"},
+    "fields": {
+        "employee": "text",
+        "department": "text",
+        "message": "text",
+    },
+    "always_filled": ["employee", "department", "message"],
+    "knowledge": [
+        "Replies are signed by the IT Service Desk.",
+        "Passwords are reset at password.northwind.example: enter your work email, confirm the "
+        "code sent to your phone, then choose a new password of at least 14 characters.",
+        "The VPN uses the GlobalProtect app: install it from the Company Portal, sign in with your "
+        "work account, and connect to the portal vpn.northwind.example.",
+        "Printers are added under Settings > Printers > Add device; floor printers are named "
+        "PRN-<floor>, for example PRN-3 on the third floor.",
+        "The IT Service Desk phone number is 020 555 0100 (weekdays 08:00-18:00).",
+    ],
+    "outcomes": {
+        "security_incident": "A possible security incident: a clicked phishing link, a lost or stolen device, a hacked account",
+        "hardware_team": "A broken or faulty device that the hardware team repairs or replaces",
+        "access_request": "A request to grant or remove access to a system, shared drive or application",
+        "auto_reply": "A common how-to question answered from the knowledge base in a drafted reply",
+        "general_queue": "Anything else for the service desk",
+    },
+    "template": (
+        "Triage incoming IT tickets. Anything that could be a security incident - a clicked "
+        "phishing link, a lost or stolen laptop or phone, a suspected hacked account - goes to "
+        "the security team immediately. Broken or faulty hardware goes to the hardware team. "
+        "Requests to grant or remove access to a system, shared drive or application go to "
+        "access requests. Common how-to questions the knowledge base answers, like resetting a "
+        "password, setting up the VPN or adding a printer, get an automatic drafted reply. "
+        "Everything else goes to the general queue."
+    ),
+    "items": [
+        {
+            "id": "it-01",
+            "employee": "Maria Lopez",
+            "department": "Finance",
+            "message": "I clicked a link in an email about my salary and typed in my password. Now I'm getting strange login alerts.",
+            "expected": "security_incident",
+        },
+        {
+            "id": "it-02",
+            "employee": "Jeroen Smit",
+            "department": "Sales",
+            "message": "How do I reset my password? It expired this morning.",
+            "expected": "auto_reply",
+        },
+        {
+            "id": "it-03",
+            "employee": "Aisha Bello",
+            "department": "Marketing",
+            "message": "My laptop screen flickers and goes black every few minutes.",
+            "expected": "hardware_team",
+        },
+        {
+            "id": "it-04",
+            "employee": "Pieter de Groot",
+            "department": "Finance",
+            "message": "Can I get access to the Finance shared drive? My manager Priya has approved it.",
+            "expected": "access_request",
+        },
+        {
+            "id": "it-05",
+            "employee": "Jeroen Smit",
+            "department": "Sales",
+            "message": "I left my work phone in a taxi last night and can't find it.",
+            "expected": "security_incident",
+        },
+        {
+            "id": "it-06",
+            "employee": "Sofia Rossi",
+            "department": "HR",
+            "message": "How do I connect to the VPN when I work from home?",
+            "expected": "auto_reply",
+        },
+        {
+            "id": "it-07",
+            "employee": "Daan Mulder",
+            "department": "Operations",
+            "message": "Two keys have been missing from my laptop keyboard since the office move.",
+            "expected": "hardware_team",
+        },
+        {
+            "id": "it-08",
+            "employee": "Aisha Bello",
+            "department": "Sales",
+            "message": "I've moved to the sales team and need a Salesforce licence.",
+            "expected": "access_request",
+        },
+        {
+            "id": "it-09",
+            "employee": "Daan Mulder",
+            "department": "Operations",
+            "message": "Could you install Python 3.12 on my machine? I need it for a data project.",
+            "expected": "general_queue",
+        },
+        {
+            "id": "it-10",
+            "employee": "Sofia Rossi",
+            "department": "HR",
+            "message": "How do I add the printer on the third floor?",
+            "expected": "auto_reply",
+        },
+        {
+            "id": "it-11",
+            "employee": "Maria Lopez",
+            "department": "Finance",
+            "message": "Microsoft says someone signed in to my account from Brazil an hour ago. I'm in Utrecht.",
+            "expected": "security_incident",
+        },
+        {
+            "id": "it-12",
+            "employee": "Pieter de Groot",
+            "department": "Finance",
+            "message": "Mijn muis doet het niet meer, kan ik een nieuwe krijgen?",
+            "expected": "hardware_team",
+        },
+        {
+            "id": "it-13",
+            "employee": "Sofia Rossi",
+            "department": "HR",
+            "message": "Please remove Tom's access to the HR system, he left the company last Friday.",
+            "expected": "access_request",
+        },
+        {
+            "id": "it-14",
+            "employee": "Jeroen Smit",
+            "department": "Sales",
+            "message": "The Wi-Fi in meeting room B is very slow today.",
+            "expected": "general_queue",
+        },
+    ],
+}
+
+ACCOUNTS_PAYABLE["noun"] = ["email", "emails"]
+ACCOUNTS_PAYABLE["display"] = {"titleField": "subject", "fromField": "sender"}
+BANK_SUPPORT["noun"] = ["message", "messages"]
+BANK_SUPPORT["display"] = {"titleField": "message", "fromField": "channel"}
+
+DATASETS = {
+    d["id"]: d for d in (ACCOUNTS_PAYABLE, BANK_SUPPORT, EXPENSE_CLAIMS, IT_HELPDESK)
+}
 
 # only what the model may see about an item: never the expected outcome
 PRIVATE_KEYS = {"id", "expected"}
