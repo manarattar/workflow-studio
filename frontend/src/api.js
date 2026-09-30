@@ -7,11 +7,17 @@ async function errorMessage(response) {
   return detail || `Request failed (${response.status})`
 }
 
-export async function getDatasets() {
-  const response = await fetch('/api/datasets')
+async function request(url, { method = 'GET', body, key } = {}) {
+  const headers = { 'Content-Type': 'application/json' }
+  if (key) headers['X-Routing-Key'] = key
+  const response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined })
   if (!response.ok) throw new Error(await errorMessage(response))
   return response.json()
 }
+
+/** Which inbox a call is about: a sample ({datasetId}) or the user's own project ({project}). */
+const target = (source) =>
+  source.project ? { project: source.project } : { dataset_id: source.datasetId }
 
 /**
  * SSE over POST: EventSource is GET-only, so the stream is read by hand and
@@ -40,16 +46,28 @@ async function postStream(url, body, onEvent) {
   }
 }
 
-/** Events: drafting (per attempt), problems (what the validator caught), done | failed. */
-export function compileWorkflow(datasetId, description, onEvent) {
-  return postStream('/api/compile', { dataset_id: datasetId, description }, onEvent)
-}
+export const getDatasets = () => request('/api/datasets')
 
-/** Events: one `item` per finished email/message, then a `summary`. */
-export function runWorkflow({ datasetId, workflow, customItem }, onEvent) {
-  return postStream(
-    '/api/run',
-    { dataset_id: datasetId, workflow, custom_item: customItem || null },
-    onEvent,
-  )
-}
+/** Events: drafting (per attempt), problems (what the validator caught), done | failed. */
+export const compileWorkflow = (source, description, onEvent) =>
+  postStream('/api/compile', { ...target(source), description }, onEvent)
+
+/** Events: one `item` per finished item, then a `summary`. */
+export const runWorkflow = (source, workflow, customItem, onEvent) =>
+  postStream('/api/run', { ...target(source), workflow, custom_item: customItem || null }, onEvent)
+
+/** Problems with an edited workflow (empty list when it's valid). Throws if the project itself is invalid. */
+export const validateWorkflow = (source, workflow) =>
+  request('/api/validate', { method: 'POST', body: { ...target(source), workflow } })
+
+export const publishProject = (project, workflow) =>
+  request('/api/projects', { method: 'POST', body: { project, workflow } })
+
+export const updatePublished = (published, project, workflow) =>
+  request(`/api/projects/${published.id}`, { method: 'PUT', body: { project, workflow }, key: published.api_key })
+
+export const unpublishProject = (published) =>
+  request(`/api/projects/${published.id}`, { method: 'DELETE', key: published.api_key })
+
+export const recentRuns = (published) =>
+  request(`/api/projects/${published.id}/runs`, { key: published.api_key })

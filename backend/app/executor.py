@@ -113,7 +113,17 @@ def _write(node: WriteNode, state: dict, knowledge: list[str]) -> dict:
 
 
 def _item_title(item: dict) -> str:
-    text = item.get("subject") or item.get("message") or item.get("body") or ""
+    text = item.get("subject") or item.get("message") or item.get("body")
+    if not text:
+        # a custom project's fields have their own names: use its first text value
+        text = next(
+            (
+                v
+                for k, v in item.items()
+                if k not in ("id", "expected") and isinstance(v, str) and v.strip()
+            ),
+            "",
+        )
     return text if len(text) <= 70 else text[:67] + "..."
 
 
@@ -220,7 +230,10 @@ def summarize(results: list[dict], wall_ms: int) -> dict:
         "automated": len(automated),
         "human_review": n - len(automated),
         # items sent to a person because Jev could not be reached, not because it was unsure
-        "jev_errors": sum(any(s.get("kind") == "jev" and "error" in s for s in r["steps"]) for r in results),
+        "jev_errors": sum(
+            any(s.get("kind") == "jev" and "error" in s for s in r["steps"])
+            for r in results
+        ),
         "automation_rate": round(len(automated) / n, 3) if n else 0,
         # accuracy counts a human-review item as not handled correctly by the workflow
         "accuracy": round(sum(r["correct"] for r in scored) / len(scored), 3)
@@ -243,13 +256,18 @@ def summarize(results: list[dict], wall_ms: int) -> dict:
 
 
 def run_items(
-    workflow: Workflow, items: list[dict], fields: dict, knowledge: list[str] | None = None
+    workflow: Workflow,
+    items: list[dict],
+    fields: dict,
+    knowledge: list[str] | None = None,
 ):
     """Yield each item's result as soon as it finishes, then the summary."""
     started = time.perf_counter()
     results = []
     with ThreadPoolExecutor(max_workers=PARALLEL_ITEMS) as pool:
-        futures = [pool.submit(run_item, workflow, item, fields, knowledge) for item in items]
+        futures = [
+            pool.submit(run_item, workflow, item, fields, knowledge) for item in items
+        ]
         for future in as_completed(futures):
             result = future.result()
             results.append(result)

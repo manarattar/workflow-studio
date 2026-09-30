@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { seconds, usd } from '../theme'
 
 const MARK = {
@@ -55,13 +56,34 @@ function LogLine({ entry }) {
   )
 }
 
-export default function ProcessPanel({ dataset, description, setDescription, onBuild, building, log }) {
-  const isReference = description.trim() === dataset.template.trim()
+export default function ProcessPanel({
+  dataset, description, setDescription, onBuild, building, log, onExport, onDelete, children,
+}) {
+  const hasReference = Boolean(dataset.template)
+  const isReference = hasReference && description.trim() === dataset.template.trim()
+  const [confirmDelete, setConfirmDelete] = useState(false)
   return (
     <aside className="flex w-[340px] shrink-0 flex-col border-r border-rule bg-sheet">
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
         <div>
-          <h2 className="font-cond text-[17px] font-semibold text-ink">The process</h2>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="truncate font-cond text-[17px] font-semibold text-ink">
+              {dataset.custom ? dataset.name : 'The process'}
+            </h2>
+            {dataset.custom && (
+              <div className="flex shrink-0 gap-3 text-[12px]">
+                <button onClick={onExport} className="text-llm hover:underline">Export</button>
+                {confirmDelete ? (
+                  <span className="flex gap-2">
+                    <button onClick={onDelete} className="text-bad hover:underline">Delete it</button>
+                    <button onClick={() => setConfirmDelete(false)} className="text-ink-3 hover:text-ink">Keep</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setConfirmDelete(true)} className="text-ink-3 hover:text-bad">Delete</button>
+                )}
+              </div>
+            )}
+          </div>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-2">
             Write it the way you'd brief a new colleague. The LLM turns it into steps; change any rule
             and build again.
@@ -77,10 +99,16 @@ export default function ProcessPanel({ dataset, description, setDescription, onB
             rows={10}
             maxLength={1500}
             className="w-full shrink-0 resize-y rounded-[3px] border border-rule bg-paper px-3 py-2.5 text-[13.5px] leading-relaxed text-ink placeholder:text-ink-3 focus:border-ink-2 focus:outline-none"
-            placeholder="Block anything that looks like fraud. Invoices over €1,000 need a manager…"
+            placeholder={
+              dataset.custom
+                ? 'Say which items go where and why, in the order you check them…'
+                : 'Block anything that looks like fraud. Invoices over €1,000 need a manager…'
+            }
           />
           <div className="mt-1 flex items-center justify-between text-[12px] text-ink-3">
-            {isReference ? (
+            {!hasReference ? (
+              <span />
+            ) : isReference ? (
               <span>Reference policy</span>
             ) : (
               <button className="text-llm hover:underline" onClick={() => setDescription(dataset.template)}>
@@ -89,6 +117,18 @@ export default function ProcessPanel({ dataset, description, setDescription, onB
             )}
             <span className="num">{description.length}/1500</span>
           </div>
+          {dataset.custom && (
+            <p className="mt-2 text-[12px] leading-snug text-ink-2">
+              Outcomes you can route to:{' '}
+              {Object.keys(dataset.outcomes).map((o, i) => (
+                <span key={o}>
+                  {i > 0 && ', '}
+                  <span className="num text-ink">{o}</span>
+                </span>
+              ))}
+              . Items it isn't sure about go to a person.
+            </p>
+          )}
         </div>
 
         <button
@@ -98,6 +138,8 @@ export default function ProcessPanel({ dataset, description, setDescription, onB
         >
           {building ? 'Building…' : 'Build workflow'}
         </button>
+
+        {children}
 
         {dataset.knowledge?.length > 0 && (
           <details className="border-t border-rule pt-3 text-[13px]">

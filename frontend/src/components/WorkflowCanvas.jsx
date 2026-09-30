@@ -26,7 +26,7 @@ function StepNode({ data }) {
         review ? 'border-dashed border-human' : 'border-rule'
       } ${data.onPath ? 'shadow-[0_0_0_2px_var(--ink)]' : 'shadow-[0_1px_2px_rgba(20,30,40,0.06)]'} ${
         data.dimmed ? 'opacity-30' : ''
-      } ${data.clickable ? 'cursor-pointer hover:border-jev' : ''}`}
+      } ${data.clickable ? 'cursor-pointer hover:border-ink-2' : ''}`}
     >
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !border-0 !bg-ink-3" />
       <div className={`flex items-center gap-1.5 font-cond text-[11px] font-semibold uppercase tracking-[0.07em] ${k.text}`}>
@@ -117,7 +117,7 @@ function buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }) {
         threshold: n.type === 'decide' ? thresholds[n.id] : null,
         onPath: onPath.has(n.id),
         dimmed: path ? !onPath.has(n.id) : false,
-        clickable: n.type === 'decide',
+        clickable: n.id !== HUMAN_REVIEW,
       },
     }
   })

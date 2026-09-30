@@ -60,6 +60,54 @@ Compiling a workflow takes ~10–15 s and ~$0.001, usually with 1–2 self-repai
 opens each inbox on a saved reference workflow (`backend/app/reference/`), so a visitor can run it
 straight away.
 
+## Build your own
+
+Open **Your projects → New project** and bring a sample of a client's inbox:
+
+1. **Items** — upload a CSV or paste rows from a spreadsheet (up to 50). Mark each column as a text
+   field, a number field, the right outcome, or ignore it. A right-outcome column makes every run
+   report accuracy against your labels.
+2. **Outcomes** — where items can end up, each with a plain description. Unsure items always go to a
+   person, so that outcome is built in.
+3. **Facts** — optional; the only information drafted text may use.
+
+Then describe the process, build it, run it on the examples, and click any step on the canvas to edit
+it (each edit is validated by the server before it is kept). Projects are stored in your browser
+only — **Export** saves one as a JSON file and **Import** loads it on another machine.
+
+### Publish as an endpoint
+
+**Connect → Publish as endpoint** stores the project's definition and workflow (never the example
+items) and returns an endpoint and a secret key. The key is shown to you and kept only as a hash on
+the server.
+
+```bash
+curl -X POST https://studio.manarattar.com/api/hooks/<project-id>   -H "Content-Type: application/json"   -H "X-Routing-Key: rs_..."   -d '{"employee": "Rae", "message": "Could I take Thursday afternoon off?", "days": 0.5}'
+```
+
+```json
+{
+  "outcome": "approve",
+  "needs_person": false,
+  "decisions": [{"step": "check_urgent_unusual", "answer": "no", "confidence": 0.78}],
+  "drafts": [],
+  "steps": [...],
+  "cost_usd": 0.000014,
+  "latency_ms": 640
+}
+```
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/projects` | Publish `{project, workflow}` → `{id, api_key, endpoint}` |
+| `PUT /api/projects/{id}` | Replace the published workflow (`X-Routing-Key`) |
+| `DELETE /api/projects/{id}` | Unpublish and delete its call log (`X-Routing-Key`) |
+| `POST /api/hooks/{id}` | Run one item (JSON object with the project's fields) |
+| `GET /api/projects/{id}/runs` | The last calls, for checking what the endpoint did |
+
+Limits: 100 items a day per endpoint, 16 KB per item; the call log keeps the last 100 calls for at
+most 30 days. A wrong key and an unknown project return the same 401, so ids can't be probed.
+
 ## Run it locally
 
 ```bash
@@ -69,7 +117,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # or .ve
 echo "OPENAI_API_KEY=sk-..." > .env
 echo "TYPESAFE_API_KEY=apikey_..." >> .env
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
-.venv/Scripts/python -m pytest tests          # 26 tests, no network needed
+.venv/Scripts/python -m pytest tests          # 50 tests, no network needed
 
 # frontend
 cd frontend
@@ -90,11 +138,16 @@ backend/app/
   compiler.py   plain language -> validated workflow, self-repair loop (streamed)
   executor.py   runs items: code / Jev / LLM per step, confidence gating, summary metrics
   datasets.py   two sample inboxes with reference outcomes and knowledge bases
-  main.py       API: datasets, compile (SSE), run (SSE), rate limiting
+  specs.py      your own project definitions, validated
+  store.py      SQLite for published projects: hashed keys, short call log
+  main.py       API: datasets, compile/run (SSE), validate, publish, webhook, rate limits
 frontend/src/
   App.jsx                      studio layout and state
   components/WorkflowCanvas    live graph with per-step traffic counts
   components/ProcessPanel      description, knowledge base, live build log
   components/InboxPanel        inbox, per-item trace, "test your own"
-  components/StepInspector     Jev question/options and the confidence threshold
+  components/StepEditor        edit any step, validated by the server
+  components/NewProject        CSV / pasted rows -> fields, outcomes, facts
+  components/ConnectPanel      publish, keys, curl/Python examples, recent calls
+  projects.js                  projects in localStorage, export / import
 ```

@@ -25,9 +25,9 @@ function Verdict({ result }) {
   )
 }
 
-function ItemRow({ item, result, running, onSelect }) {
-  const title = item.subject || item.message
-  const from = item.sender || item.channel
+function ItemRow({ item, result, running, onSelect, display }) {
+  const title = item.subject || item.message || (display && item[display.titleField]) || ''
+  const from = item.sender || item.channel || (display?.fromField && item[display.fromField]) || ''
   const clickable = Boolean(result)
   return (
     <li>
@@ -138,19 +138,37 @@ function Trace({ result, nodeMap, onBack }) {
   )
 }
 
-function Composer({ dataset, onRun, disabled }) {
+/** The main text field of an item: where a person types the message itself. */
+const textFieldOf = (dataset) =>
+  dataset.fields.body ? 'body' : dataset.fields.message ? 'message' : dataset.display?.titleField
+
+const nounOf = (dataset, plural) => {
+  const one = dataset.fields.body ? 'email' : dataset.custom ? 'item' : 'message'
+  return plural ? `${one}s` : one
+}
+
+function Composer({ dataset, onRun, onAddExample, disabled }) {
   const [open, setOpen] = useState(false)
   const [values, setValues] = useState({})
-  const textField = dataset.fields.body ? 'body' : 'message'
-  const noun = dataset.fields.body ? 'email' : 'message'
+  const [expected, setExpected] = useState('')
+  const textField = textFieldOf(dataset)
+  const noun = nounOf(dataset)
   const fields = Object.entries(dataset.fields)
-  const filled = (values[textField] || '').trim().length > 0
+  const filled = fields.some(([name]) => String(values[name] ?? '').trim())
+
+  const item = () =>
+    Object.fromEntries(
+      fields.map(([name, type]) => [
+        name,
+        type === 'number' ? (values[name] === '' || values[name] == null ? null : Number(values[name])) : values[name] || '',
+      ]),
+    )
 
   if (!open) {
     return (
       <div className="border-t border-rule px-4 py-3">
         <button onClick={() => setOpen(true)} className="text-[13px] text-llm hover:underline">
-          Test your own {noun}
+          {dataset.custom ? `Test or add an ${noun}` : `Test your own ${noun}`}
         </button>
       </div>
     )
@@ -159,21 +177,16 @@ function Composer({ dataset, onRun, disabled }) {
     'w-full rounded-[3px] border border-rule bg-paper px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-3 focus:border-ink-2 focus:outline-none'
   return (
     <form
-      className="space-y-2 border-t border-rule px-4 py-3"
+      className="max-h-[55%] space-y-2 overflow-y-auto border-t border-rule px-4 py-3"
       onSubmit={(e) => {
         e.preventDefault()
-        onRun(
-          Object.fromEntries(
-            fields.map(([name, type]) => [
-              name,
-              type === 'number' ? (values[name] ? Number(values[name]) : null) : values[name] || '',
-            ]),
-          ),
-        )
+        onRun(item())
       }}
     >
       <div className="flex items-center justify-between">
-        <h3 className="font-cond text-[13px] font-semibold text-ink-2">Test your own {noun}</h3>
+        <h3 className="font-cond text-[13px] font-semibold text-ink-2">
+          {dataset.custom ? `Test or add an ${noun}` : `Test your own ${noun}`}
+        </h3>
         <button type="button" onClick={() => setOpen(false)} className="text-[12px] text-ink-3 hover:text-ink">Close</button>
       </div>
       {fields.map(([name, type]) =>
@@ -183,7 +196,7 @@ function Composer({ dataset, onRun, disabled }) {
             id={`custom-${name}`}
             rows={3}
             aria-label={humanize(name)}
-            placeholder={noun === 'email' ? 'Email text' : 'Customer message'}
+            placeholder={noun === 'email' ? 'Email text' : noun === 'message' ? 'Customer message' : humanize(name)}
             value={values[name] || ''}
             onChange={(e) => setValues({ ...values, [name]: e.target.value })}
             className={`${input} resize-none`}
@@ -208,16 +221,43 @@ function Composer({ dataset, onRun, disabled }) {
       >
         Run it through the workflow
       </button>
+      {dataset.custom && (
+        <div className="flex gap-2 border-t border-rule pt-2">
+          <select
+            id="custom-expected"
+            aria-label="Right outcome for this example"
+            value={expected}
+            onChange={(e) => setExpected(e.target.value)}
+            className={`${input} flex-1`}
+          >
+            <option value="">Right outcome (optional)</option>
+            {Object.keys(dataset.outcomes).map((o) => <option key={o} value={o}>{humanize(o)}</option>)}
+          </select>
+          <button
+            type="button"
+            disabled={!filled || dataset.items.length >= 50}
+            onClick={() => {
+              onAddExample({ ...item(), ...(expected ? { expected } : {}) })
+              setValues({})
+              setExpected('')
+            }}
+            className="rounded-[3px] border border-rule px-3 text-[13px] text-ink hover:bg-paper disabled:opacity-40"
+          >
+            Add to examples
+          </button>
+        </div>
+      )}
     </form>
   )
 }
 
 export default function InboxPanel({
-  dataset, results, running, selectedId, onSelect, nodeMap, canRun, onRunInbox, onRunCustom,
+  dataset, results, running, selectedId, onSelect, nodeMap, canRun, onRunInbox, onRunCustom, onAddExample,
 }) {
   const selected = selectedId && results[selectedId]
   const done = Object.keys(results).filter((id) => id !== 'custom').length
-  const noun = dataset.fields.body ? 'emails' : 'messages'
+  const noun = nounOf(dataset, true)
+  const empty = dataset.items.length === 0
   return (
     <aside className="flex w-[360px] shrink-0 flex-col border-l border-rule bg-sheet">
       {selected ? (
@@ -233,7 +273,7 @@ export default function InboxPanel({
             </div>
             <button
               onClick={onRunInbox}
-              disabled={!canRun || running}
+              disabled={!canRun || running || empty}
               className="rounded-[3px] bg-ink px-4 py-2 text-[14px] font-medium text-paper transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {running ? 'Running…' : 'Run inbox'}
@@ -244,10 +284,17 @@ export default function InboxPanel({
               <ItemRow item={{ id: 'custom', subject: results.custom.title, sender: 'Your test' }} result={results.custom} onSelect={onSelect} />
             )}
             {dataset.items.map((item) => (
-              <ItemRow key={item.id} item={item} result={results[item.id]} running={running} onSelect={onSelect} />
+              <ItemRow key={item.id} item={item} result={results[item.id]} running={running} onSelect={onSelect} display={dataset.display} />
             ))}
+            {empty && (
+              <li className="px-4 py-6 text-[13px] leading-relaxed text-ink-2">
+                No example items yet. Add some below, with their right outcome, to measure the workflow.
+              </li>
+            )}
           </ul>
-          {canRun && <Composer dataset={dataset} onRun={onRunCustom} disabled={running} />}
+          {(canRun || dataset.custom) && (
+            <Composer dataset={dataset} onRun={onRunCustom} onAddExample={onAddExample} disabled={running || !canRun} />
+          )}
         </>
       )}
     </aside>
