@@ -82,7 +82,10 @@ items) and returns an endpoint and a secret key. The key is shown to you and kep
 the server.
 
 ```bash
-curl -X POST https://studio.manarattar.com/api/hooks/<project-id>   -H "Content-Type: application/json"   -H "X-Routing-Key: rs_..."   -d '{"employee": "Rae", "message": "Could I take Thursday afternoon off?", "days": 0.5}'
+curl -X POST https://studio.manarattar.com/api/hooks/<project-id> \
+  -H "Content-Type: application/json" \
+  -H "X-Routing-Key: rs_..." \
+  -d '{"employee": "Rae", "message": "Could I take Thursday afternoon off?", "days": 0.5}'
 ```
 
 ```json
