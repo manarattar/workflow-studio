@@ -3,7 +3,8 @@ import time
 from collections import defaultdict, deque
 
 from app import store
-from app.compiler import MAX_DESCRIPTION_CHARS, compile_steps
+from app.assistant import MAX_QUESTION_CHARS, explain
+from app.compiler import MAX_DESCRIPTION_CHARS, compile_steps, revise_steps
 from app.datasets import DATASETS
 from app.executor import run_item, run_items
 from app.models import HUMAN_REVIEW, Workflow, validate_workflow
@@ -29,7 +30,7 @@ app.add_middleware(
 )
 
 # A public demo spends real API credit, so each visitor gets a small budget per hour.
-RATE_LIMITS = {"compile": 20, "run": 30, "publish": 20}
+RATE_LIMITS = {"compile": 20, "run": 30, "publish": 20, "ask": 60}
 _calls: dict = defaultdict(deque)
 
 # A published endpoint may be called at most this often per day (the run log keeps
@@ -170,6 +171,45 @@ def run_endpoint(body: RunRequest, request: Request):
     _check_rate(request, "run")
     return _sse(
         run_items(workflow, items, dataset["fields"], dataset.get("knowledge", []))
+    )
+
+
+class ReviseRequest(BaseModel):
+    dataset_id: str | None = None
+    project: dict | None = None
+    workflow: dict
+    request: str = Field(max_length=MAX_DESCRIPTION_CHARS)
+
+
+class AskRequest(BaseModel):
+    dataset_id: str | None = None
+    project: dict | None = None
+    workflow: dict
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    # one item's trace from a run, when the question is about that item
+    item_result: dict | None = None
+    summary: dict | None = None
+
+
+@app.post("/api/revise")
+def revise_endpoint(body: ReviseRequest, request: Request):
+    """Streams a change to the current workflow: drafting, problems fixed, then the new version."""
+    dataset = _resolve(body.dataset_id, body.project)
+    current = _checked_workflow(body.workflow, dataset)
+    _check_rate(request, "compile")
+    return _sse(revise_steps(current.model_dump(), body.request, dataset))
+
+
+@app.post("/api/ask")
+def ask_endpoint(body: AskRequest, request: Request):
+    """Explain the workflow or one item's result, from the actual trace."""
+    dataset = _resolve(body.dataset_id, body.project)
+    workflow = _checked_workflow(body.workflow, dataset)
+    if body.item_result is not None and len(json.dumps(body.item_result)) > 30_000:
+        raise HTTPException(413, "That item's trace is too large to explain.")
+    _check_rate(request, "ask")
+    return explain(
+        body.question, workflow.model_dump(), dataset, body.item_result, body.summary
     )
 
 
