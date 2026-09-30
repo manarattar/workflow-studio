@@ -265,6 +265,17 @@ class TestExecutor:
         result = executor.run_item(ap_workflow(), item("x", 10, "PO-1"), AP["fields"])
         assert result["outcome"] == HUMAN_REVIEW
 
+    def test_summary_separates_unreachable_from_unsure(self, monkeypatch):
+        def down(state, questions):
+            raise ConnectionError("unreachable")
+
+        monkeypatch.setattr(executor, "ask_jev", down)
+        summary = list(
+            executor.run_items(ap_workflow(), [item("x", 10, "PO-1")], AP["fields"])
+        )[-1]
+        assert summary["human_review"] == 1
+        assert summary["jev_errors"] == 1
+
     def test_summary_counts(self, fake_models):
         fake_models.update({"a": 0.02, "b": 0.98, "c": 0.55})
         items = [

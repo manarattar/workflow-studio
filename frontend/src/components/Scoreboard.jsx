@@ -16,7 +16,12 @@ export default function Scoreboard({ summary, total }) {
   return (
     <div className="grid grid-cols-5 divide-x divide-rule border-b border-rule bg-sheet">
       <Cell label="Handled automatically" value={s ? pct(s.automation_rate) : '–'} note={s ? `${s.automated} of ${s.items}` : `run the ${total} items`} tone="text-done" />
-      <Cell label="Sent to a person" value={s ? s.human_review : '–'} note="Jev wasn't sure enough" tone="text-human" />
+      <Cell
+        label="Sent to a person"
+        value={s ? s.human_review : '–'}
+        note={s?.jev_errors ? `${s.jev_errors} because Jev couldn't be reached` : "Jev wasn't sure enough"}
+        tone="text-human"
+      />
       <Cell label="Correct when automated" value={s ? pct(s.accuracy_automated) : '–'} note="vs. reference policy" />
       <Cell label="Cost" value={s ? usd(s.cost_usd) : '–'} note={s ? `${s.jev_calls} Jev, ${s.llm_calls} LLM calls` : 'Jev and LLM calls'} />
       <Cell label="Time" value={s ? seconds(s.wall_ms) : '–'} note="items run in parallel" />

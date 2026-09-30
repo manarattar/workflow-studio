@@ -219,6 +219,8 @@ def summarize(results: list[dict], wall_ms: int) -> dict:
         "items": n,
         "automated": len(automated),
         "human_review": n - len(automated),
+        # items sent to a person because Jev could not be reached, not because it was unsure
+        "jev_errors": sum(any(s.get("kind") == "jev" and "error" in s for s in r["steps"]) for r in results),
         "automation_rate": round(len(automated) / n, 3) if n else 0,
         # accuracy counts a human-review item as not handled correctly by the workflow
         "accuracy": round(sum(r["correct"] for r in scored) / len(scored), 3)

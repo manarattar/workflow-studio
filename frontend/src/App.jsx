@@ -140,7 +140,14 @@ export default function App() {
     try {
       await runWorkflow({ datasetId, workflow: runnable }, (event) => {
         if (event.event === 'item') setResults((prev) => ({ ...prev, [event.item_id]: event }))
-        else setSummary(event)
+        else {
+          setSummary(event)
+          if (event.jev_errors) {
+            setError(
+              `Jev couldn't be reached for ${event.jev_errors} of ${event.items} items, so they went to a person. Try again in a moment.`,
+            )
+          }
+        }
       })
     } catch (e) {
       setError(`The run stopped: ${e.message}`)
