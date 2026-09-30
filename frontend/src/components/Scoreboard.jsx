@@ -14,7 +14,7 @@ function Cell({ label, value, note, tone = 'text-ink' }) {
 export default function Scoreboard({ summary, total, custom }) {
   const s = summary
   return (
-    <div className="grid grid-cols-5 divide-x divide-rule border-b border-rule bg-sheet">
+    <div data-tour="results" className="grid grid-cols-5 divide-x divide-rule border-b border-rule bg-sheet">
       <Cell label="Handled automatically" value={s ? pct(s.automation_rate) : '–'} note={s ? `${s.automated} of ${s.items}` : `run the ${total} items`} tone="text-done" />
       <Cell
         label="Sent to a person"

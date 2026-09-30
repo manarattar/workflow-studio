@@ -260,7 +260,7 @@ export default function InboxPanel({
   const noun = nounOf(dataset, true)
   const empty = dataset.items.length === 0
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-rule bg-sheet">
+    <aside data-tour="inbox" className="flex w-[360px] shrink-0 flex-col border-l border-rule bg-sheet">
       {selected ? (
         <Trace result={selected} nodeMap={nodeMap} onBack={() => onSelect(null)} />
       ) : (

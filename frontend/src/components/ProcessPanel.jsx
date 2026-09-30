@@ -58,12 +58,32 @@ function LogLine({ entry }) {
 
 export default function ProcessPanel({
   dataset, description, setDescription, onBuild, building, log, onExport, onDelete, children,
+  tab = 'process', onTab, chat, chatBadge,
 }) {
   const hasReference = Boolean(dataset.template)
   const isReference = hasReference && description.trim() === dataset.template.trim()
   const [confirmDelete, setConfirmDelete] = useState(false)
   return (
-    <aside className="flex w-[340px] shrink-0 flex-col border-r border-rule bg-sheet">
+    <aside data-tour="process" className="flex w-[340px] shrink-0 flex-col border-r border-rule bg-sheet">
+      <div role="tablist" aria-label="Left panel" className="flex border-b border-rule px-5">
+        {[['process', 'Process'], ['chat', 'Chat']].map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            id={`tab-${key}`}
+            data-tour={key === 'chat' ? 'chat' : undefined}
+            aria-selected={tab === key}
+            onClick={() => onTab?.(key)}
+            className={`-mb-px mr-5 border-b-2 py-2.5 text-[13.5px] ${
+              tab === key ? 'border-ink font-medium text-ink' : 'border-transparent text-ink-2 hover:text-ink'
+            }`}
+          >
+            {label}
+            {key === 'chat' && chatBadge ? <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-human align-middle" /> : null}
+          </button>
+        ))}
+      </div>
+      {tab === 'chat' ? chat : (
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
         <div>
           <div className="flex items-baseline justify-between gap-2">
@@ -173,6 +193,7 @@ export default function ProcessPanel({
           </section>
         )}
       </div>
+      )}
     </aside>
   )
 }

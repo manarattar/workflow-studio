@@ -77,3 +77,14 @@ export const unpublishProject = (published) =>
 
 export const recentRuns = (published) =>
   request(`/api/projects/${published.id}/runs`, { key: published.api_key })
+
+/** Events like a build: drafting, problems, then done with {workflow, changes} or failed. */
+export const reviseWorkflow = (source, workflow, request, onEvent) =>
+  postStream('/api/revise', { ...target(source), workflow, request }, onEvent)
+
+/** An answer about the workflow, or about one item when its run result is passed. */
+export const askAboutWorkflow = (source, workflow, question, itemResult, summary) =>
+  request('/api/ask', {
+    method: 'POST',
+    body: { ...target(source), workflow, question, item_result: itemResult || null, summary: summary || null },
+  })

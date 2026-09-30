@@ -23,7 +23,7 @@ function StepNode({ data }) {
     <div
       style={{ width: NODE_W }}
       className={`rounded-[3px] border bg-sheet px-3 py-2 transition-[opacity,box-shadow] duration-200 ${
-        review ? 'border-dashed border-human' : 'border-rule'
+        review ? 'border-dashed border-human' : data.diff === 'added' ? 'border-2 border-done' : data.diff === 'changed' ? 'border-2 border-human' : 'border-rule'
       } ${data.onPath ? 'shadow-[0_0_0_2px_var(--ink)]' : 'shadow-[0_1px_2px_rgba(20,30,40,0.06)]'} ${
         data.dimmed ? 'opacity-30' : ''
       } ${data.clickable ? 'cursor-pointer hover:border-ink-2' : ''}`}
@@ -32,6 +32,11 @@ function StepNode({ data }) {
       <div className={`flex items-center gap-1.5 font-cond text-[11px] font-semibold uppercase tracking-[0.07em] ${k.text}`}>
         <Glyph kind={data.kind} />
         <span>{k.label}</span>
+        {data.diff && (
+          <span className={`ml-auto rounded-[2px] px-1 text-[10px] tracking-[0.06em] ${data.diff === 'added' ? 'bg-done-soft text-done' : 'bg-human-soft text-human'}`}>
+            {data.diff === 'added' ? 'NEW' : 'CHANGED'}
+          </span>
+        )}
         {data.count > 0 && <span className="num ml-auto text-[11px] font-medium tracking-normal text-ink-2">{data.count}</span>}
       </div>
       <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-ink" title={data.label}>
@@ -56,7 +61,7 @@ function linksOf(node) {
   return []
 }
 
-function buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }) {
+function buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds, diff }) {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 78 })
   g.setDefaultEdgeLabel(() => ({}))
@@ -118,16 +123,17 @@ function buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }) {
         onPath: onPath.has(n.id),
         dimmed: path ? !onPath.has(n.id) : false,
         clickable: n.id !== HUMAN_REVIEW,
+        diff: diff?.[n.id],
       },
     }
   })
   return { nodes, edges }
 }
 
-export default function WorkflowCanvas({ workflow, path, nodeCounts, edgeCounts, thresholds, onSelectStep }) {
+export default function WorkflowCanvas({ workflow, path, nodeCounts, edgeCounts, thresholds, diff, onSelectStep }) {
   const graph = useMemo(
-    () => buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds }),
-    [workflow, path, nodeCounts, edgeCounts, thresholds],
+    () => buildGraph(workflow, { path, nodeCounts, edgeCounts, thresholds, diff }),
+    [workflow, path, nodeCounts, edgeCounts, thresholds, diff],
   )
   // React Flow v12 keeps nodes hidden until it has measured them and reports the
   // measurements through onNodesChange, so it owns the node state; each new layout

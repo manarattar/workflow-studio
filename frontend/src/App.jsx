@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { compileWorkflow, getDatasets, runWorkflow, validateWorkflow } from './api'
+import {
+  askAboutWorkflow, compileWorkflow, getDatasets, reviseWorkflow, runWorkflow, validateWorkflow,
+} from './api'
 import {
   asDataset, deleteProject, exportProject, importProject, loadProjects, saveProject, specOf,
 } from './projects'
 import { HUMAN_REVIEW, KIND, pathOf } from './theme'
+import ChatPanel from './components/ChatPanel'
 import ConnectPanel from './components/ConnectPanel'
 import Glyph from './components/Glyph'
 import InboxPanel from './components/InboxPanel'
 import NewProject from './components/NewProject'
+import Onboarding, { hasSeenOnboarding } from './components/Onboarding'
 import ProcessPanel from './components/ProcessPanel'
 import Scoreboard from './components/Scoreboard'
 import StepEditor from './components/StepEditor'
@@ -29,6 +33,22 @@ const withThresholds = (wf, thresholds) =>
     nodes: wf.nodes.map((n) => (n.type === 'decide' ? { ...n, min_confidence: thresholds[n.id] } : n)),
   }
 
+const MAX_VERSIONS = 20
+
+/** Steps that are new or changed in `next` compared with `prev`, plus labels of removed steps. */
+function diffWorkflows(prev, next) {
+  const strip = ({ min_confidence, ...n }) => n // eslint-disable-line no-unused-vars
+  const before = Object.fromEntries(prev.nodes.map((n) => [n.id, JSON.stringify(strip(n))]))
+  const after = new Set(next.nodes.map((n) => n.id))
+  const diff = {}
+  next.nodes.forEach((n) => {
+    if (!(n.id in before)) diff[n.id] = 'added'
+    else if (before[n.id] !== JSON.stringify(strip(n))) diff[n.id] = 'changed'
+  })
+  const removed = prev.nodes.filter((n) => !after.has(n.id)).map((n) => n.label)
+  return { diff, removed }
+}
+
 function Legend() {
   return (
     <ul className="hidden items-center gap-4 2xl:flex">
@@ -47,7 +67,7 @@ function ProjectsMenu({ projects, onOpen, onNew, onImport }) {
   const [open, setOpen] = useState(false)
   const file = useRef(null)
   return (
-    <div className="relative self-stretch">
+    <div data-tour="projects" className="relative self-stretch">
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
@@ -89,6 +109,8 @@ export default function App() {
   const [descriptions, setDescriptions] = useState({})
   const [error, setError] = useState(null)
   const [showNew, setShowNew] = useState(false)
+  // first visit: a short tour instead of dropping people into the full studio
+  const [showTour, setShowTour] = useState(() => !hasSeenOnboarding())
 
   const [building, setBuilding] = useState(false)
   const [log, setLog] = useState([])
@@ -101,6 +123,13 @@ export default function App() {
   const [summary, setSummary] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedStep, setSelectedStep] = useState(null)
+
+  const [leftTab, setLeftTab] = useState('process')
+  const [messages, setMessages] = useState([])
+  const [proposal, setProposal] = useState(null) // {workflow, diff, request} while waiting for accept/discard
+  const [versions, setVersions] = useState([])
+  const [pendingCompare, setPendingCompare] = useState(null) // {before, oldWorkflow} after accepting
+  const [chatBusy, setChatBusy] = useState(false)
 
   const project = current.kind === 'project' ? projects.find((p) => p.id === current.id) : null
   const dataset = project ? asDataset(project) : datasets.find((d) => d.id === current.id)
@@ -144,6 +173,9 @@ export default function App() {
     if (building || running) return
     setCurrent(next)
     setSelectedStep(null)
+    setMessages([])
+    setProposal(null)
+    setPendingCompare(null)
     resetRun()
     if (next.kind === 'sample') {
       const d = datasets.find((x) => x.id === next.id)
@@ -152,10 +184,12 @@ export default function App() {
       const p = loadProjects().find((x) => x.id === next.id)
       showWorkflow(p?.workflow || null, p?.thresholds || {}, [])
     }
+    setVersions(next.kind === 'project' ? loadProjects().find((x) => x.id === next.id)?.versions || [] : [])
   }
 
   const nodeMap = useMemo(() => Object.fromEntries((workflow?.nodes || []).map((n) => [n.id, n])), [workflow])
   const runnable = useMemo(() => withThresholds(workflow, thresholds), [workflow, thresholds])
+  const selectedResult = selectedItem ? results[selectedItem] : null
 
   // how many inbox items went through each step and edge
   const { nodeCounts, edgeCounts } = useMemo(() => {
@@ -209,7 +243,7 @@ export default function App() {
     }
   }
 
-  const run = async (customItem) => {
+  const run = async (customItem, onSummary) => {
     setRunning(true)
     setError(null)
     if (!customItem) resetRun()
@@ -221,6 +255,7 @@ export default function App() {
           if (customItem) setSelectedItem('custom')
         } else if (!customItem) {
           setSummary(event)
+          onSummary?.(event)
           if (event.jev_errors) {
             setError(`Jev couldn't be reached for ${event.jev_errors} of ${event.items} items, so they went to a person. Try again in a moment.`)
           }
@@ -245,6 +280,116 @@ export default function App() {
     setWorkflow(next)
     patchProject({ workflow: next })
     return []
+  }
+
+  const updateLast = (patch) =>
+    setMessages((prev) => [...prev.slice(0, -1), { ...prev[prev.length - 1], ...patch }])
+
+  const sendChat = async (text, mode) => {
+    const about = mode === 'ask' && selectedResult ? selectedResult.title : null
+    setMessages((prev) => [...prev, { role: 'user', mode, text, about }])
+    setChatBusy(true)
+    try {
+      if (mode === 'ask') {
+        const { answer } = await askAboutWorkflow(source, runnable, text, selectedResult, summary)
+        setMessages((prev) => [...prev, { role: 'assistant', kind: 'answer', text: answer }])
+        return
+      }
+      setMessages((prev) => [...prev, { role: 'assistant', kind: 'proposal', stage: 'working', attempt: 1 }])
+      await reviseWorkflow(source, runnable, text, (event) => {
+        if (event.stage === 'drafting') updateLast({ attempt: event.attempt })
+        if (event.stage === 'failed') updateLast({ stage: 'failed', problems: event.problems })
+        if (event.stage === 'done') {
+          const { diff, removed } = diffWorkflows(workflow, event.result.workflow)
+          if (!Object.keys(diff).length && !removed.length) {
+            setMessages((prev) => [
+              ...prev.slice(0, -1),
+              { role: 'assistant', kind: 'answer', text: `No change was made. ${(event.result.changes || []).join(' ')}` },
+            ])
+            return
+          }
+          setProposal({ workflow: event.result.workflow, diff, request: text })
+          setSelectedStep(null)
+          updateLast({
+            stage: 'done', status: 'pending', changes: event.result.changes || [], removed,
+            repairs: (event.result.repairs || []).length,
+          })
+        }
+      })
+    } catch (e) {
+      setMessages((prev) => [...prev, { role: 'assistant', kind: 'error', text: e.message }])
+    } finally {
+      setChatBusy(false)
+    }
+  }
+
+  const markProposal = (status) =>
+    setMessages((prev) =>
+      prev.map((m) => (m.kind === 'proposal' && m.status === 'pending' ? { ...m, status } : m)),
+    )
+
+  const keepVersion = (label) => {
+    const next = [...versions, { at: Date.now(), label, workflow, thresholds }].slice(-MAX_VERSIONS)
+    setVersions(next)
+    return next
+  }
+
+  const acceptProposal = () => {
+    const nextVersions = keepVersion(`Before: ${proposal.request}`)
+    const t = thresholdsOf(proposal.workflow, thresholds)
+    setPendingCompare({ before: summary, oldWorkflow: runnable })
+    setWorkflow(proposal.workflow)
+    setThresholds(t)
+    setBuildId((id) => id + 1)
+    patchProject({ workflow: proposal.workflow, thresholds: t, versions: nextVersions })
+    setProposal(null)
+    resetRun()
+    markProposal('accepted')
+    setMessages((prev) => [...prev, { role: 'assistant', kind: 'accepted', canCompare: dataset.items.length > 0 }])
+  }
+
+  const discardProposal = () => {
+    setProposal(null)
+    markProposal('discarded')
+  }
+
+  /** Summary of a run without touching the inbox view - used for the "before" numbers. */
+  const collectSummary = (wf) =>
+    new Promise((resolve, reject) => {
+      let found = null
+      runWorkflow(source, wf, null, (event) => {
+        if (event.event === 'summary') found = event
+      }).then(() => resolve(found), reject)
+    })
+
+  const runAndCompare = async () => {
+    if (!pendingCompare) return
+    setChatBusy(true)
+    try {
+      const before = pendingCompare.before || (await collectSummary(pendingCompare.oldWorkflow))
+      await run(null, (after) => {
+        setMessages((prev) => [
+          ...prev.map((m) => (m.kind === 'accepted' ? { ...m, canCompare: false } : m)),
+          { role: 'assistant', kind: 'compare', before, after },
+        ])
+      })
+      setPendingCompare(null)
+    } catch (e) {
+      setMessages((prev) => [...prev, { role: 'assistant', kind: 'error', text: e.message }])
+    } finally {
+      setChatBusy(false)
+    }
+  }
+
+  const restoreVersion = (v) => {
+    const nextVersions = keepVersion('Before restoring an earlier version')
+    setWorkflow(v.workflow)
+    setThresholds(thresholdsOf(v.workflow, v.thresholds || {}))
+    setBuildId((id) => id + 1)
+    patchProject({ workflow: v.workflow, thresholds: v.thresholds || {}, versions: nextVersions })
+    setProposal(null)
+    resetRun()
+    setMessages((prev) => [...prev, { role: 'assistant', kind: 'answer', text: 'Restored the earlier version.' }])
   }
 
   const checkSpec = async (p) => {
@@ -280,8 +425,7 @@ export default function App() {
     open({ kind: 'sample', id: 'accounts_payable' })
   }
 
-  const selectedResult = selectedItem ? results[selectedItem] : null
-  const editing = selectedStep && nodeMap[selectedStep] ? nodeMap[selectedStep] : null
+  const editing = !proposal && selectedStep && nodeMap[selectedStep] ? nodeMap[selectedStep] : null
 
   return (
     <div className="flex h-full flex-col bg-paper text-ink">
@@ -291,7 +435,7 @@ export default function App() {
           <p className="mt-1 text-[12px] text-ink-2">A process in plain words, run on a real inbox</p>
         </div>
 
-        <nav aria-label="Inboxes" className="flex self-stretch">
+        <nav aria-label="Inboxes" data-tour="inboxes" className="flex self-stretch">
           {datasets.map((d) => {
             const active = current.kind === 'sample' && current.id === d.id
             return (
@@ -310,8 +454,11 @@ export default function App() {
           <ProjectsMenu projects={projects} onOpen={(id) => open({ kind: 'project', id })} onNew={() => setShowNew(true)} onImport={importFile} />
         </nav>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-5">
           <Legend />
+          <button onClick={() => setShowTour(true)} className="whitespace-nowrap text-[13px] text-llm hover:underline">
+            How it works
+          </button>
         </div>
       </header>
 
@@ -333,6 +480,23 @@ export default function App() {
             log={log}
             onExport={() => exportProject(loadProjects().find((p) => p.id === project.id))}
             onDelete={removeProject}
+            tab={leftTab}
+            onTab={setLeftTab}
+            chatBadge={Boolean(proposal)}
+            chat={
+              <ChatPanel
+                messages={messages}
+                onSend={sendChat}
+                onAccept={acceptProposal}
+                onDiscard={discardProposal}
+                onRunCompare={runAndCompare}
+                busy={chatBusy || running || building}
+                hasWorkflow={Boolean(runnable)}
+                selectedTitle={selectedResult?.title}
+                versions={versions}
+                onRestore={restoreVersion}
+              />
+            }
           >
             {project && (
               <ConnectPanel
@@ -345,11 +509,12 @@ export default function App() {
 
           <main className="flex min-w-0 flex-1 flex-col">
             <Scoreboard summary={summary} total={dataset.items.length} custom={Boolean(project)} />
-            <div className="relative min-h-0 flex-1">
+            <div data-tour="canvas" className="relative min-h-0 flex-1">
               {runnable ? (
                 <WorkflowCanvas
-                  key={`${current.kind}-${current.id}-${buildId}`}
-                  workflow={runnable}
+                  key={`${current.kind}-${current.id}-${buildId}-${proposal ? "proposal" : "current"}`}
+                  workflow={proposal ? withThresholds(proposal.workflow, thresholdsOf(proposal.workflow, thresholds)) : runnable}
+                  diff={proposal?.diff}
                   path={pathOf(selectedResult)}
                   nodeCounts={nodeCounts}
                   edgeCounts={edgeCounts}
@@ -409,6 +574,14 @@ export default function App() {
         !error && <p className="p-8 text-[14px] text-ink-2">Loading…</p>
       )}
 
+      {showTour && dataset && (
+        <Onboarding
+          onClose={(startRun) => {
+            setShowTour(false)
+            if (startRun && runnable && !running) run()
+          }}
+        />
+      )}
       {showNew && <NewProject onCreate={createProject} onCancel={() => setShowNew(false)} checkSpec={checkSpec} />}
     </div>
   )

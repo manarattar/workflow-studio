@@ -60,6 +60,24 @@ Compiling a workflow takes ~10–15 s and ~$0.001, usually with 1–2 self-repai
 opens each inbox on a saved reference workflow (`backend/app/reference/`), so a visitor can run it
 straight away.
 
+## Change it by chatting
+
+The **Chat** tab next to the process description talks to the current workflow:
+
+- **Propose change** - "Send any invoice over EUR 10,000 straight to the manager, before the fraud
+  check". The LLM sees the current workflow and returns a new version, which goes through the same
+  validation and repair loop as a new build. New and changed steps are marked on the canvas until
+  you **Accept** or **Discard**.
+- **Run and compare** - after accepting, runs the examples and shows automation and accuracy before
+  and after the change. (Trying the example above drops accuracy from 100% to 94%: the fraud email
+  over EUR 10,000 now reaches the manager instead of being blocked - which is exactly what the
+  comparison is for.)
+- **Ask** - "Why did this one end where it did?" is answered from the selected item's actual trace
+  (Jev's probabilities, the rule that fired), with a suggested change if one fits.
+- **Earlier versions** - every accepted change keeps the previous version, with Restore.
+
+First-time visitors get a short guided tour of the screen (replay it with **How it works**).
+
 ## Build your own
 
 Open **Your projects → New project** and bring a sample of a client's inbox:
@@ -120,7 +138,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # or .ve
 echo "OPENAI_API_KEY=sk-..." > .env
 echo "TYPESAFE_API_KEY=apikey_..." >> .env
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
-.venv/Scripts/python -m pytest tests          # 50 tests, no network needed
+.venv/Scripts/python -m pytest tests          # 55 tests, no network needed
 
 # frontend
 cd frontend
@@ -138,9 +156,10 @@ Tailwind CSS 4 · React Flow + dagre · IBM Plex · Docker · Caddy
 ```
 backend/app/
   models.py     workflow language + validator
-  compiler.py   plain language -> validated workflow, self-repair loop (streamed)
+  compiler.py   plain language -> validated workflow; change an existing one by request
   executor.py   runs items: code / Jev / LLM per step, confidence gating, summary metrics
-  datasets.py   two sample inboxes with reference outcomes and knowledge bases
+  datasets.py   four sample inboxes with reference outcomes and knowledge bases
+  assistant.py  answers questions about a workflow from an item's trace
   specs.py      your own project definitions, validated
   store.py      SQLite for published projects: hashed keys, short call log
   main.py       API: datasets, compile/run (SSE), validate, publish, webhook, rate limits
