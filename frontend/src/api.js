@@ -10,7 +10,13 @@ async function errorMessage(response) {
 async function request(url, { method = 'GET', body, key } = {}) {
   const headers = { 'Content-Type': 'application/json' }
   if (key) headers['X-Routing-Key'] = key
-  const response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined })
+  // API data changes per request (new inboxes, recent calls), so never serve it from a cache
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
+  })
   if (!response.ok) throw new Error(await errorMessage(response))
   return response.json()
 }
