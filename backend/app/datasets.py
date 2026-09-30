@@ -19,6 +19,14 @@ ACCOUNTS_PAYABLE = {
     },
     # present on every item, so checking whether they are empty is pointless
     "always_filled": ["sender", "subject", "body", "amount_eur"],
+    # the only facts a write step may use, so drafts can't invent details
+    "knowledge": [
+        "Company: Northwind Retail B.V., Amsterdam. Messages are sent by the Accounts Payable team.",
+        "Every invoice must quote a purchase order number in the format PO-12345.",
+        "Suppliers without a purchase order number can request one from their contact at Northwind.",
+        "Invoices with a valid purchase order are paid within 30 days of receipt.",
+        "Invoices can be sent to invoices@northwind-retail.example.",
+    ],
     "outcomes": {
         "pay_automatically": "Genuine invoice, has a purchase order, small enough to pay without approval",
         "manager_approval": "Genuine invoice with a purchase order, but large enough to need a manager",
@@ -189,6 +197,19 @@ BANK_SUPPORT = {
         "message": "text",
     },
     "always_filled": ["channel", "message"],
+    # the only facts a write step may use, so drafts can't invent details
+    "knowledge": [
+        "Bank: Harbour Bank (a fictional demo bank). Replies are signed by the Customer Service team.",
+        "Branch opening hours: Monday to Friday 09:00-17:30, Saturday 10:00-14:00 (Amsterdam, "
+        "Rotterdam and Utrecht branches), closed on Sunday.",
+        "Card spending limits: in the app go to Cards > your card > Limits, choose a daily limit "
+        "and confirm with your PIN. Changes apply immediately.",
+        "Standard savings account interest rate: 1.50% per year, variable.",
+        "Payments abroad in euros within the EU are free; payments in other currencies cost EUR 5.",
+        "A business account can be opened online at harbourbank.example/business; you need a "
+        "Chamber of Commerce (KvK) registration and valid ID.",
+        "The customer service phone number is 020 123 4567 (weekdays 08:00-20:00).",
+    ],
     "outcomes": {
         "fraud_team_urgent": "Fraud, a scam, or a lost or stolen card - needs the fraud team immediately",
         "vulnerable_callback": "The customer seems vulnerable (elderly and confused, grieving, in financial trouble) - a person calls back",

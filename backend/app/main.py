@@ -2,7 +2,7 @@ import json
 import time
 from collections import defaultdict, deque
 
-from app.compiler import MAX_DESCRIPTION_CHARS, CompileError, compile_workflow
+from app.compiler import MAX_DESCRIPTION_CHARS, compile_steps
 from app.datasets import DATASETS
 from app.executor import run_items
 from app.models import Workflow, validate_workflow
@@ -78,7 +78,7 @@ def datasets():
     return [
         {
             k: d[k]
-            for k in ("id", "name", "blurb", "fields", "outcomes", "template", "items")
+            for k in ("id", "name", "blurb", "fields", "outcomes", "template", "knowledge", "items")
         }
         for d in DATASETS.values()
     ]
@@ -86,14 +86,15 @@ def datasets():
 
 @app.post("/api/compile")
 def compile_endpoint(body: CompileRequest, request: Request):
+    """Streams the build log: drafting, problems found and fixed, then the workflow."""
+    dataset = _dataset(body.dataset_id)
     _check_rate(request, "compile")
-    try:
-        return compile_workflow(body.description, _dataset(body.dataset_id))
-    except CompileError as error:
-        raise HTTPException(
-            422,
-            {"message": "Could not build a valid workflow", "problems": error.problems},
-        )
+
+    def event_stream():
+        for event in compile_steps(body.description, dataset):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/api/run")
@@ -121,7 +122,9 @@ def run_endpoint(body: RunRequest, request: Request):
     _check_rate(request, "run")
 
     def event_stream():
-        for event in run_items(workflow, items, dataset["fields"]):
+        for event in run_items(
+            workflow, items, dataset["fields"], dataset.get("knowledge", [])
+        ):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -218,6 +218,28 @@ class TestExecutor:
             s["kind"] == "llm" and "PO number" in s["text"] for s in result["steps"]
         )
 
+    def test_writer_gets_the_knowledge_base(self, fake_models, monkeypatch):
+        prompts = []
+
+        def spy_chat(messages, json_mode=False, max_tokens=None):
+            prompts.append(messages[-1]["content"])
+            return {
+                "text": "ok",
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "latency_ms": 1,
+            }
+
+        monkeypatch.setattr(executor, "chat", spy_chat)
+        fake_models["no po"] = 0.02
+        executor.run_item(
+            ap_workflow(),
+            item("no po", 200, ""),
+            AP["fields"],
+            ["Invoices are paid in 30 days."],
+        )
+        assert "Invoices are paid in 30 days." in prompts[0]
+
     def test_expected_outcome_never_reaches_the_models(self, fake_models, monkeypatch):
         seen = []
 
@@ -356,7 +378,32 @@ class TestApi:
         from app import main
 
         monkeypatch.setitem(main.RATE_LIMITS, "compile", 1)
-        monkeypatch.setattr(main, "compile_workflow", lambda d, ds: {"ok": True})
+        monkeypatch.setattr(
+            main, "compile_steps", lambda d, ds: iter([{"stage": "done", "result": {}}])
+        )
         body = {"dataset_id": "accounts_payable", "description": "pay invoices"}
         assert self.client.post("/api/compile", json=body).status_code == 200
         assert self.client.post("/api/compile", json=body).status_code == 429
+
+    def test_compile_streams_the_repair_log(self, monkeypatch):
+        broken = ap_workflow().model_dump()
+        broken["start"] = "nowhere"
+        replies = [json.dumps(broken), ap_workflow().model_dump_json()]
+        monkeypatch.setattr(
+            compiler,
+            "chat",
+            lambda *a, **k: {
+                "text": replies.pop(0),
+                "input_tokens": 1,
+                "output_tokens": 1,
+                "latency_ms": 1,
+            },
+        )
+        body = {"dataset_id": "accounts_payable", "description": AP["template"]}
+        text = self.client.post("/api/compile", json=body).text
+        stages = [
+            json.loads(line[6:])["stage"]
+            for line in text.splitlines()
+            if line.startswith("data: ")
+        ]
+        assert stages == ["drafting", "problems", "drafting", "done"]

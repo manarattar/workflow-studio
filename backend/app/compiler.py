@@ -77,7 +77,11 @@ def _intent_problems(description: str, workflow: Workflow, dataset: dict) -> lis
     problems = []
     always_filled = set(dataset.get("always_filled", []))
     for node in workflow.nodes:
-        if node.type == "condition" and node.operator in ("is_empty", "not_empty") and node.field in always_filled:
+        if (
+            node.type == "condition"
+            and node.operator in ("is_empty", "not_empty")
+            and node.field in always_filled
+        ):
             problems.append(
                 f"Step '{node.id}' checks whether '{node.field}' is empty, but it is always filled in, "
                 f"so the check is always the same. Use a decide step for judgments about the text."
@@ -122,9 +126,24 @@ def _dataset_brief(dataset: dict) -> str:
 
 
 def compile_workflow(description: str, dataset: dict) -> dict:
+    """Compile and return only the final result (raises CompileError on failure)."""
+    for event in compile_steps(description, dataset):
+        if event["stage"] == "done":
+            return event["result"]
+        if event["stage"] == "failed":
+            raise CompileError(event["problems"])
+    raise CompileError(["Compilation ended without a result."])
+
+
+def compile_steps(description: str, dataset: dict):
+    """
+    Same compilation, yielding progress as it happens so the UI can show the
+    real self-repair loop: drafting -> problems found -> fixed -> done.
+    """
     description = description.strip()[:MAX_DESCRIPTION_CHARS]
     if not description:
-        raise CompileError(["The process description is empty."])
+        yield {"stage": "failed", "problems": ["The process description is empty."]}
+        return
 
     messages = [
         {"role": "system", "content": SYSTEM},
@@ -139,6 +158,7 @@ def compile_workflow(description: str, dataset: dict) -> dict:
     repairs: list[list[str]] = []
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
+        yield {"stage": "drafting", "attempt": attempt}
         reply = chat(messages, json_mode=True)
         for key in usage:
             usage[key] += reply[key]
@@ -152,7 +172,7 @@ def compile_workflow(description: str, dataset: dict) -> dict:
             problems = [f"The JSON does not match the step format: {str(error)[:600]}"]
 
         if not problems:
-            return {
+            result = {
                 "workflow": workflow.model_dump(),
                 "attempts": attempt,
                 # problems found and fixed on the way, shown in the UI
@@ -160,8 +180,11 @@ def compile_workflow(description: str, dataset: dict) -> dict:
                 "latency_ms": usage["latency_ms"],
                 "cost_usd": llm_cost(usage["input_tokens"], usage["output_tokens"]),
             }
+            yield {"stage": "done", "result": result}
+            return
 
         repairs.append(problems)
+        yield {"stage": "problems", "attempt": attempt, "problems": problems}
         messages += [
             {"role": "assistant", "content": reply["text"]},
             {
@@ -172,4 +195,4 @@ def compile_workflow(description: str, dataset: dict) -> dict:
             },
         ]
 
-    raise CompileError(problems)
+    yield {"stage": "failed", "problems": problems}
