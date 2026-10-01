@@ -52,8 +52,8 @@ const STEPS = [
   },
   {
     target: 'inboxes',
-    title: 'Four sample inboxes',
-    body: 'Invoices, bank customer messages, expense claims and IT tickets. Each opens with a working workflow, so you can try it straight away.',
+    title: 'Pick a use case',
+    body: 'Four sample inboxes: invoices, bank customer messages, expense claims and IT tickets. Each opens with a working workflow. Your own projects live in this menu too.',
   },
   {
     target: 'process',
@@ -95,9 +95,15 @@ function useTargetRect(target) {
   }, [target])
   useLayoutEffect(measure, [measure])
   useEffect(() => {
+    // the panel may have just been switched in (phones show one at a time), so look again shortly
+    const later = [80, 350].map((ms) => setTimeout(() => {
+      const el = target && document.querySelector(`[data-tour="${target}"]`)
+      if (el && el.getBoundingClientRect().top > window.innerHeight - 120) el.scrollIntoView({ block: 'center' })
+      measure()
+    }, ms))
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [measure])
+    return () => { later.forEach(clearTimeout); window.removeEventListener('resize', measure) }
+  }, [measure, target])
   return rect
 }
 
@@ -107,6 +113,7 @@ function cardPosition(rect) {
   const gap = 14
   const vw = window.innerWidth
   const vh = window.innerHeight
+  if (vw < 640) return { left: 12, right: 12, bottom: 12 }
   if (!rect) return { left: Math.max(16, (vw - 440) / 2), top: Math.max(16, vh * 0.18), width: 440 }
   const clampTop = (t) => Math.min(Math.max(16, t), vh - 260)
   if (rect.right + gap + W < vw - 16) return { left: rect.right + gap, top: clampTop(rect.top + 16), width: W }
@@ -119,11 +126,15 @@ function cardPosition(rect) {
   }
 }
 
-export default function Onboarding({ onClose }) {
+export default function Onboarding({ onClose, onStep }) {
   const [index, setIndex] = useState(0)
   const step = STEPS[index]
   const rect = useTargetRect(step.target)
   const last = index === STEPS.length - 1
+
+  useEffect(() => {
+    onStep?.(step.target)
+  }, [step.target, onStep])
 
   const close = useCallback((startRun = false) => {
     markSeen()
@@ -163,7 +174,7 @@ export default function Onboarding({ onClose }) {
 
       <div
         className="fixed rounded-[3px] border border-rule bg-sheet p-5 shadow-[0_20px_60px_rgba(20,30,40,0.3)]"
-        style={{ left: pos.left, top: pos.top, width: pos.width }}
+        style={{ ...pos, maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto' }}
       >
         <p className="num text-[11.5px] text-ink-3">
           {index + 1} of {STEPS.length}

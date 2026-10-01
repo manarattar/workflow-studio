@@ -253,14 +253,14 @@ function Composer({ dataset, onRun, onAddExample, disabled }) {
 }
 
 export default function InboxPanel({
-  dataset, results, running, selectedId, onSelect, nodeMap, canRun, onRunInbox, onRunCustom, onAddExample,
+  dataset, results, running, selectedId, onSelect, nodeMap, canRun, onRunInbox, onRunCustom, onAddExample, mobileShow,
 }) {
   const selected = selectedId && results[selectedId]
   const done = Object.keys(results).filter((id) => id !== 'custom').length
   const noun = nounOf(dataset, true)
   const empty = dataset.items.length === 0
   return (
-    <aside data-tour="inbox" className="flex w-[360px] shrink-0 flex-col border-l border-rule bg-sheet">
+    <aside data-tour="inbox" className={`${mobileShow ? 'flex' : 'hidden lg:flex'} min-h-0 w-full flex-1 flex-col bg-sheet lg:w-[360px] lg:flex-none lg:shrink-0 lg:border-l lg:border-rule`}>
       {selected ? (
         <Trace result={selected} nodeMap={nodeMap} onBack={() => onSelect(null)} />
       ) : (

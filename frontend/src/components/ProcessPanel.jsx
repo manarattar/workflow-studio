@@ -58,13 +58,13 @@ function LogLine({ entry }) {
 
 export default function ProcessPanel({
   dataset, description, setDescription, onBuild, building, log, onExport, onDelete, children,
-  tab = 'process', onTab, chat, chatBadge,
+  tab = 'process', onTab, chat, chatBadge, mobileShow,
 }) {
   const hasReference = Boolean(dataset.template)
   const isReference = hasReference && description.trim() === dataset.template.trim()
   const [confirmDelete, setConfirmDelete] = useState(false)
   return (
-    <aside data-tour="process" className="flex w-[340px] shrink-0 flex-col border-r border-rule bg-sheet">
+    <aside data-tour="process" className={`${mobileShow ? 'flex' : 'hidden lg:flex'} min-h-0 w-full flex-1 flex-col bg-sheet lg:w-[340px] lg:flex-none lg:shrink-0 lg:border-r lg:border-rule`}>
       <div role="tablist" aria-label="Left panel" className="flex border-b border-rule px-5">
         {[['process', 'Process'], ['chat', 'Chat']].map(([key, label]) => (
           <button

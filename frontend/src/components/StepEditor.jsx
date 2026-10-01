@@ -33,7 +33,7 @@ export default function StepEditor({ node, fields, threshold, onThreshold, onApp
   }
 
   return (
-    <div className="pointer-events-auto max-h-[calc(100vh-220px)] w-[360px] overflow-y-auto rounded-[3px] border border-rule bg-sheet p-4 shadow-[0_8px_24px_rgba(20,30,40,0.12)]">
+    <div className="pointer-events-auto max-h-[calc(100dvh-260px)] w-[min(360px,calc(100vw-2rem))] overflow-y-auto rounded-[3px] border border-rule bg-sheet p-4 shadow-[0_8px_24px_rgba(20,30,40,0.12)]">
       <div className="flex items-start justify-between gap-3">
         <p className={`flex items-center gap-1.5 font-cond text-[11px] font-semibold uppercase tracking-[0.07em] ${k.text}`}>
           <Glyph kind={kind} /> {k.label} step

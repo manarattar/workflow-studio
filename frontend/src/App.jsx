@@ -63,37 +63,72 @@ function Legend() {
   )
 }
 
-function ProjectsMenu({ projects, onOpen, onNew, onImport }) {
+function UseCaseMenu({ datasets, projects, current, project, onOpen, onNew, onImport }) {
   const [open, setOpen] = useState(false)
   const file = useRef(null)
+  const wrap = useRef(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const away = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false) }
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc) }
+  }, [open])
+
+  const sample = current.kind === 'sample' ? datasets.find((d) => d.id === current.id) : null
+  const name = project ? project.name : sample ? sample.name : 'Choose a use case'
+  const pick = (next) => { setOpen(false); onOpen(next) }
+  const group = 'px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-ink-3'
+  const row = 'block w-full px-3 py-2 text-left hover:bg-paper'
+
   return (
-    <div data-tour="projects" className="relative self-stretch">
+    <div ref={wrap} data-tour="projects" className="relative w-full lg:w-auto">
       <button
+        data-tour="inboxes"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="h-full border-b-2 border-transparent px-3 text-[13.5px] text-ink-2 hover:text-ink"
+        aria-haspopup="menu"
+        className="flex w-full items-center gap-2 rounded-[3px] border border-rule bg-paper px-3 py-1.5 text-left hover:border-ink-3 lg:w-72"
       >
-        Your projects ▾
+        <span className="min-w-0 flex-1">
+          <span className="block text-[11px] leading-none text-ink-3">Use case</span>
+          <span className="mt-0.5 block truncate text-[13.5px] font-medium leading-tight text-ink">{name}</span>
+        </span>
+        <span aria-hidden className="text-[11px] text-ink-3">▾</span>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-40 w-64 rounded-[3px] border border-rule bg-sheet py-1 shadow-[0_8px_24px_rgba(20,30,40,0.12)]">
+        <div role="menu" className="absolute left-0 right-0 top-full z-40 mt-1 max-h-[70vh] overflow-y-auto rounded-[3px] border border-rule bg-sheet pb-1 shadow-[0_8px_24px_rgba(20,30,40,0.14)] lg:right-auto lg:w-96">
+          <p className={group}>Sample inboxes</p>
+          {datasets.map((d) => {
+            const active = current.kind === 'sample' && current.id === d.id
+            return (
+              <button key={d.id} role="menuitem" onClick={() => pick({ kind: 'sample', id: d.id })} className={row}>
+                <span className={`block text-[13.5px] ${active ? 'font-semibold text-ink' : 'text-ink'}`}>
+                  {d.name.replace(' inbox', '')}{active && <span className="ml-1.5 text-[11px] font-normal text-ink-3">open</span>}
+                </span>
+                <span className="block text-[12px] leading-snug text-ink-3">{d.blurb}</span>
+              </button>
+            )
+          })}
+          <p className={`${group} mt-1 border-t border-rule`}>Your projects</p>
           {projects.length === 0 && (
-            <p className="px-3 py-2 text-[12.5px] text-ink-3">No projects yet. They are kept in this browser.</p>
+            <p className="px-3 pb-2 text-[12.5px] text-ink-3">None yet. Projects are kept in this browser.</p>
           )}
           {projects.map((p) => (
-            <button key={p.id} onClick={() => { setOpen(false); onOpen(p.id) }}
-              className="block w-full truncate px-3 py-1.5 text-left text-[13px] text-ink hover:bg-paper">
+            <button key={p.id} role="menuitem" onClick={() => pick({ kind: 'project', id: p.id })} className={`${row} truncate text-[13.5px] text-ink`}>
               {p.name}
               {p.published && <span className="ml-1.5 text-[11px] text-done">live</span>}
             </button>
           ))}
-          <div className="my-1 border-t border-rule" />
-          <button onClick={() => { setOpen(false); onNew() }} className="block w-full px-3 py-1.5 text-left text-[13px] font-medium text-ink hover:bg-paper">
-            New project
-          </button>
-          <button onClick={() => file.current?.click()} className="block w-full px-3 py-1.5 text-left text-[13px] text-ink hover:bg-paper">
-            Import a project file
-          </button>
+          <div className="mt-1 border-t border-rule pt-1">
+            <button role="menuitem" onClick={() => { setOpen(false); onNew() }} className={`${row} text-[13.5px] font-medium text-ink`}>
+              New project
+            </button>
+            <button role="menuitem" onClick={() => file.current?.click()} className={`${row} text-[13.5px] text-ink`}>
+              Import a project file
+            </button>
+          </div>
           <input ref={file} id="import-file" type="file" accept=".json,application/json" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setOpen(false); onImport(f) } }} />
         </div>
@@ -101,6 +136,8 @@ function ProjectsMenu({ projects, onOpen, onNew, onImport }) {
     </div>
   )
 }
+
+const VIEWS = [['process', 'Process'], ['workflow', 'Workflow'], ['inbox', 'Inbox']]
 
 export default function App() {
   const [datasets, setDatasets] = useState([])
@@ -125,6 +162,7 @@ export default function App() {
   const [selectedStep, setSelectedStep] = useState(null)
 
   const [leftTab, setLeftTab] = useState('process')
+  const [view, setView] = useState('workflow') // which panel is on screen below the lg breakpoint
   const [messages, setMessages] = useState([])
   const [proposal, setProposal] = useState(null) // {workflow, diff, request} while waiting for accept/discard
   const [versions, setVersions] = useState([])
@@ -429,49 +467,45 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col bg-paper text-ink">
-      <header className="flex items-center gap-8 border-b border-rule bg-sheet px-5">
-        <div className="py-3">
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-rule bg-sheet px-4 py-2.5 lg:flex-nowrap lg:gap-8 lg:px-5 lg:py-0">
+        <div className="lg:py-3">
           <h1 className="font-cond text-[19px] font-semibold leading-none tracking-[-0.01em]">Routing Slip</h1>
-          <p className="mt-1 text-[12px] text-ink-2">A process in plain words, run on a real inbox</p>
+          <p className="mt-1 hidden text-[12px] text-ink-2 sm:block">A process in plain words, run on a real inbox</p>
         </div>
 
-        <nav aria-label="Inboxes" data-tour="inboxes" className="flex self-stretch">
-          {datasets.map((d) => {
-            const active = current.kind === 'sample' && current.id === d.id
-            return (
-              <button key={d.id} onClick={() => open({ kind: 'sample', id: d.id })} title={d.blurb}
-                aria-current={active ? 'page' : undefined}
-                className={`border-b-2 px-3 text-[13.5px] transition-colors ${active ? 'border-ink font-medium text-ink' : 'border-transparent text-ink-2 hover:text-ink'}`}>
-                {d.name.replace(' inbox', '')}
-              </button>
-            )
-          })}
-          {project && (
-            <span aria-current="page" className="flex max-w-[220px] items-center border-b-2 border-ink px-3 text-[13.5px] font-medium text-ink">
-              <span className="truncate">{project.name}</span>
-            </span>
-          )}
-          <ProjectsMenu projects={projects} onOpen={(id) => open({ kind: 'project', id })} onNew={() => setShowNew(true)} onImport={importFile} />
-        </nav>
+        <div className="order-3 w-full lg:order-none lg:w-auto">
+          <UseCaseMenu
+            datasets={datasets}
+            projects={projects}
+            current={current}
+            project={project}
+            onOpen={open}
+            onNew={() => setShowNew(true)}
+            onImport={importFile}
+          />
+        </div>
 
         <div className="ml-auto flex items-center gap-5">
           <Legend />
           <button onClick={() => setShowTour(true)} className="whitespace-nowrap text-[13px] text-llm hover:underline">
-            How it works
+            <span className="hidden sm:inline">How it works</span>
+            <span className="sm:hidden">Tour</span>
           </button>
         </div>
       </header>
 
       {error && (
-        <div role="alert" className="flex items-center justify-between border-b border-rule bg-human-soft px-5 py-2 text-[13px] text-ink">
+        <div role="alert" className="flex items-center justify-between gap-3 border-b border-rule bg-human-soft px-4 py-2 text-[13px] text-ink lg:px-5">
           {error}
           <button className="text-[12px] text-ink-2 hover:text-ink" onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
 
       {dataset ? (
-        <div className="flex min-h-0 flex-1">
+        <>
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <ProcessPanel
+            mobileShow={view === 'process'}
             dataset={dataset}
             description={description}
             setDescription={setDescription}
@@ -507,7 +541,7 @@ export default function App() {
             )}
           </ProcessPanel>
 
-          <main className="flex min-w-0 flex-1 flex-col">
+          <main className={`min-h-0 min-w-0 flex-1 flex-col ${view === 'workflow' ? 'flex' : 'hidden lg:flex'}`}>
             <Scoreboard summary={summary} total={dataset.items.length} custom={Boolean(project)} />
             <div data-tour="canvas" className="relative min-h-0 flex-1">
               {runnable ? (
@@ -557,6 +591,7 @@ export default function App() {
           </main>
 
           <InboxPanel
+            mobileShow={view === 'inbox'}
             key={`${current.kind}-${current.id}`}
             dataset={dataset}
             results={results}
@@ -570,12 +605,33 @@ export default function App() {
             onAddExample={(item) => patchProject({ items: [...(project?.items || []), item] })}
           />
         </div>
+        <nav aria-label="Panels" className="grid shrink-0 grid-cols-3 border-t border-rule bg-sheet pb-[env(safe-area-inset-bottom)] lg:hidden">
+          {VIEWS.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              aria-current={view === key ? 'page' : undefined}
+              className={`relative py-3 text-[13.5px] ${view === key ? 'font-medium text-ink' : 'text-ink-3'}`}
+            >
+              {view === key && <span className="absolute inset-x-6 top-0 h-0.5 bg-ink" />}
+              {label}
+              {key === 'inbox' && running && <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-jev align-middle" />}
+            </button>
+          ))}
+        </nav>
+        </>
       ) : (
         !error && <p className="p-8 text-[14px] text-ink-2">Loading…</p>
       )}
 
       {showTour && dataset && (
         <Onboarding
+          onStep={(target) => {
+            const panel = { process: 'process', chat: 'process', canvas: 'workflow', results: 'workflow', inbox: 'inbox' }[target]
+            if (panel) setView(panel)
+            if (target === 'chat') setLeftTab('chat')
+            if (target === 'process') setLeftTab('process')
+          }}
           onClose={(startRun) => {
             setShowTour(false)
             if (startRun && runnable && !running) run()
