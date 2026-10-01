@@ -12,6 +12,7 @@ import Glyph from './components/Glyph'
 import InboxPanel from './components/InboxPanel'
 import NewProject from './components/NewProject'
 import Onboarding, { hasSeenOnboarding } from './components/Onboarding'
+import ThemeToggle from "./components/ThemeToggle.jsx";
 import ProcessPanel from './components/ProcessPanel'
 import Scoreboard from './components/Scoreboard'
 import StepEditor from './components/StepEditor'
@@ -485,12 +486,13 @@ export default function App() {
           />
         </div>
 
-        <div className="ml-auto flex items-center gap-5">
+        <div className="ml-auto flex items-center gap-3 sm:gap-5">
           <Legend />
           <button onClick={() => setShowTour(true)} className="whitespace-nowrap text-[13px] text-llm hover:underline">
             <span className="hidden sm:inline">How it works</span>
             <span className="sm:hidden">Tour</span>
           </button>
+          <ThemeToggle />
         </div>
       </header>
 
